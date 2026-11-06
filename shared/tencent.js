@@ -162,9 +162,11 @@ export function parseQuoteFields(symbol, f) {
   }
 
   if (market === 'hk') {
-    const volume = num(f[6]);
-    const amount = num(f[37]);
     const type = classify(f[63]);
+    // 港股指数没有成交股数：f[6] 与 f[37] 相同，都是成交额，单位万港元（与分时接口第 3、4 列的换算关系一致）
+    const hkIndex = type === 'index';
+    const volume = hkIndex ? null : num(f[6]);
+    const amount = hkIndex ? scale(num(f[37]) ?? num(f[6]), 10_000) : num(f[37]);
     const bid = num(f[9]);
     const ask = num(f[19]);
     return {
@@ -190,8 +192,9 @@ export function parseQuoteFields(symbol, f) {
 
   // us
   const volume = num(f[36]) ?? num(f[6]);
-  const amount = num(f[37]);
   const type = classify(f[56]);
+  // 美股指数的 f[37] 量级不对（道指约 4.4×10^13），不展示
+  const amount = type === 'index' ? null : num(f[37]);
   const bid = num(f[9]);
   const ask = num(f[19]);
   return {
@@ -261,7 +264,7 @@ const isIndexLike = (quote) => quote?.type === 'index';
  * 解析分时数据行。腾讯的成交量 / 成交额是当日累计值，这里换算为每分钟增量。
  * A 股成交量单位为「手」，转换为股。
  */
-export function parseMinuteRows(rows, { market, withAvg = true }) {
+export function parseMinuteRows(rows, { market, withAvg = true, volumeFromAmount = false }) {
   const points = [];
   let prevVol = 0;
   let vwapNum = 0;
@@ -273,7 +276,8 @@ export function parseMinuteRows(rows, { market, withAvg = true }) {
     if (market === 'cn' && hhmm > '1500') break; // 盘后固定价格交易不画进分时
     const price = num(p);
     if (price === null) continue;
-    const cumVol = (num(v) ?? 0) * volFactor;
+    // 港股指数没有成交股数，量柱改用累计成交额（第 4 列，港元）
+    const cumVol = volumeFromAmount ? num(a) ?? 0 : (num(v) ?? 0) * volFactor;
     const cumAmt = num(a);
     const volume = Math.max(0, cumVol - prevVol);
     prevVol = Math.max(prevVol, cumVol);
@@ -463,6 +467,8 @@ export function createTencentProvider(io, { name = 'tencent', label = '腾讯财
     const market = marketOf(symbol);
     const quote = await getQuote(symbol);
     const withAvg = !isIndexLike(quote);
+    const hkIndex = market === 'hk' && isIndexLike(quote);
+    const volumeKind = hkIndex ? 'amount' : 'volume';
 
     if (days > 1) {
       return cache.wrap(`minute5:${symbol}`, 20_000, async () => {
@@ -476,9 +482,9 @@ export function createTencentProvider(io, { name = 'tencent', label = '腾讯财
           .map((day) => ({
             date: fmtDate(day.date),
             prevClose: num(day.prec),
-            points: parseMinuteRows(day.data ?? [], { market, withAvg }),
+            points: parseMinuteRows(day.data ?? [], { market, withAvg, volumeFromAmount: hkIndex }),
           }));
-        return { symbol, market, decimals: quote.decimals, prevClose: sessions.at(-1)?.prevClose ?? quote.prevClose, sessions };
+        return { symbol, market, decimals: quote.decimals, volumeKind, prevClose: sessions.at(-1)?.prevClose ?? quote.prevClose, sessions };
       });
     }
 
@@ -494,7 +500,8 @@ export function createTencentProvider(io, { name = 'tencent', label = '腾讯财
         market,
         decimals: quote.decimals,
         prevClose: quote.prevClose,
-        sessions: [{ date, prevClose: quote.prevClose, points: parseMinuteRows(rows, { market, withAvg }) }],
+        volumeKind,
+        sessions: [{ date, prevClose: quote.prevClose, points: parseMinuteRows(rows, { market, withAvg, volumeFromAmount: hkIndex }) }],
       };
     });
   }
@@ -538,7 +545,8 @@ export function createTencentProvider(io, { name = 'tencent', label = '腾讯财
       const node = json?.data?.[code];
       const rows = node?.[`${adj}${period}`] ?? node?.[period];
       if (!Array.isArray(rows)) throw new NotFoundError(`没有 ${symbol} 的 K 线数据`);
-      return { symbol, market, period, adjust: adj, decimals: quote.decimals, bars: parseKlineRows(rows, { market }) };
+      const volumeKind = market === 'hk' && index ? 'amount' : 'volume';
+      return { symbol, market, period, adjust: adj, decimals: quote.decimals, volumeKind, bars: parseKlineRows(rows, { market }) };
     });
   }
 

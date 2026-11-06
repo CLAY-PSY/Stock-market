@@ -31,10 +31,11 @@ function statsFor(q) {
     ['最高', px(q.high)],
     ['最低', px(q.low)],
     ['昨收', plain(fmtPrice(q.prevClose, d))],
-    ['成交量', plain(fmtVolume(q.volume, q.market))],
-    ['成交额', plain(fmtBig(q.amount) + (q.amount ? cur : ''))],
+    // 数据源不提供的项不显示（例如港股指数没有成交股数、美股指数没有可靠的成交额）
+    q.volume === null || q.volume === undefined ? null : ['成交量', plain(fmtVolume(q.volume, q.market))],
+    q.amount === null || q.amount === undefined ? null : ['成交额', plain(fmtBig(q.amount) + (q.amount ? cur : ''))],
     ['振幅', plain(q.amplitude === null ? '--' : `${fmtNum(q.amplitude)}%`)],
-  ];
+  ].filter(Boolean);
   if (!isIndex) {
     list.push(['换手率', plain(q.turnoverRate === null || q.turnoverRate === undefined ? '--' : `${fmtNum(q.turnoverRate)}%`)]);
     list.push(['市盈率TTM', plain(q.pe ? fmtNum(q.pe) : '--')]);
@@ -165,6 +166,8 @@ export function initQuotePanel({ onAlert }) {
     els.typeTag.hidden = !TYPE_LABEL[q.type];
     els.price.textContent = fmtPrice(q.price, q.decimals);
     els.price.className = `q-price num ${dir}`;
+    // 价格很长（如恒指 24534.190）时手机上一行放不下价格 + 两个按钮：按钮改为只显示图标
+    els.price.closest('.q-top')?.classList.toggle('long-price', els.price.textContent.length >= 8);
     const [abs, pct] = els.change.children;
     abs.textContent = fmtChange(q.change, q.decimals);
     pct.textContent = fmtPct(q.changePct);

@@ -1775,6 +1775,8 @@ select,
     height: auto;
     min-height: 100vh;
     padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    /* 兜底：任何内容都不能把页面撑宽（否则 iOS Safari 会整体缩小页面，顶栏右侧露出空白） */
+    overflow-x: clip;
   }
   @supports (height: 100dvh) {
     .app {
@@ -1961,24 +1963,45 @@ select,
   .panel-quote {
     padding: 12px;
   }
+  /* 名称一行；价格与按钮一行，放不下时按钮自动换到下一行右侧，绝不撑出屏幕 */
   .q-top {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 6px 12px;
-    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 6px 10px;
   }
   .q-ident {
-    grid-column: 1 / -1;
+    flex: 1 1 100%;
+    min-width: 0;
   }
   .q-name h1 {
     font-size: 17px;
   }
   .q-price-block {
+    flex: 0 1 auto;
+    min-width: 0;
     gap: 10px;
   }
   .q-price {
     font-size: 30px;
     padding: 0;
+    white-space: nowrap;
+  }
+  .q-actions {
+    flex: none;
+    margin-left: auto !important;
+  }
+  /* 价格位数多（如恒指 24534.190）：按钮只显示图标 */
+  .q-top.long-price .q-price {
+    font-size: 28px;
+  }
+  .q-top.long-price .q-actions .btn {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .q-top.long-price .q-actions .btn span {
+    display: none;
   }
   .q-change {
     font-size: 13px;
@@ -2214,11 +2237,11 @@ select,
     padding: 8px 12px;
   }
   .q-top {
-    grid-template-columns: auto 1fr auto;
+    flex-wrap: nowrap;
     align-items: center;
   }
   .q-ident {
-    grid-column: auto;
+    flex: 0 1 auto;
   }
   .q-price {
     font-size: 24px;
