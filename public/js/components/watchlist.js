@@ -49,6 +49,57 @@ export function initWatchlist({ onPick }) {
   let dragSymbol = null;
   const clearDropMarks = () => $$('.drop-before', list).forEach((el) => el.classList.toggle('drop-before', false));
 
+  /* 编辑模式：删除 / 置顶 / 上移 / 下移。触屏设备没有悬停，也不支持 HTML5 拖拽，靠它来管理自选 */
+  let editing = false;
+  const editBtn = $('#wl-edit');
+  const setEditing = (on) => {
+    editing = on;
+    editBtn.textContent = on ? '完成' : '编辑';
+    editBtn.setAttribute('aria-pressed', String(on));
+    list.classList.toggle('editing', on);
+    if (on && sort.key) {
+      sort = { key: null, dir: null }; // 调整顺序时按自选原始顺序显示
+      $$('button', $('#wl-head')).forEach((b) => delete b.dataset.dir);
+    }
+    render();
+  };
+  editBtn.addEventListener('click', () => setEditing(!editing));
+
+  const move = (symbol, where) => {
+    const wl = store.watchlist;
+    const i = wl.indexOf(symbol);
+    if (i < 0) return;
+    if (where === 'top' && i > 0) store.moveInWatchlist(symbol, wl[0]);
+    if (where === 'up' && i > 0) store.moveInWatchlist(symbol, wl[i - 1]);
+    if (where === 'down' && i < wl.length - 1) store.moveInWatchlist(symbol, wl[i + 2]);
+  };
+
+  const editOps = (symbol) => {
+    const wl = store.watchlist;
+    const i = wl.indexOf(symbol);
+    const btn = (icon, label, action, disabled) => {
+      const b = h('button', { type: 'button', class: 'wl-op', title: label, 'aria-label': label, html: icons[icon], disabled });
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        action();
+      });
+      return b;
+    };
+    return h(
+      'span',
+      { class: 'wl-ops' },
+      btn('top', '置顶', () => move(symbol, 'top'), i === 0),
+      btn('up', '上移', () => move(symbol, 'up'), i === 0),
+      btn('down', '下移', () => move(symbol, 'down'), i === wl.length - 1),
+    );
+  };
+
+  const removeSymbol = (symbol) => {
+    const nm = store.nameOf(symbol);
+    store.removeFromWatchlist(symbol);
+    toast(`已将 ${nm} 移出自选`, { duration: 2000 });
+  };
+
   const render = () => {
     const syms = visibleSymbols();
     list.replaceChildren();
@@ -71,15 +122,19 @@ export function initWatchlist({ onPick }) {
       const price = h('span', { class: 'wl-price' }, '--');
       const chg = h('span', { class: 'wl-chg flat' }, '--');
       const removeBtn = h('button', { class: 'wl-remove', type: 'button', title: '移出自选', 'aria-label': '移出自选', html: icons.close });
+      const deleteBtn = editing
+        ? h('button', { class: 'wl-delete', type: 'button', title: '删除', 'aria-label': `删除 ${store.nameOf(symbol)}`, html: icons.minus })
+        : null;
       const li = h(
         'li',
         {
           class: 'wl-item',
           role: 'option',
           'aria-selected': String(symbol === store.selected),
-          draggable: sort.key ? 'false' : 'true',
+          draggable: sort.key || editing ? 'false' : 'true',
           dataset: { symbol },
         },
+        deleteBtn,
         h(
           'span',
           { class: 'wl-name' },
@@ -91,14 +146,18 @@ export function initWatchlist({ onPick }) {
         ),
         price,
         chg,
-        removeBtn,
+        editing ? editOps(symbol) : removeBtn,
       );
-      li.addEventListener('click', () => onPick(symbol));
+      li.addEventListener('click', () => {
+        if (!editing) onPick(symbol);
+      });
+      deleteBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeSymbol(symbol);
+      });
       removeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const nm = store.nameOf(symbol);
-        store.removeFromWatchlist(symbol);
-        toast(`已将 ${nm} 移出自选`, { duration: 2000 });
+        removeSymbol(symbol);
       });
       li.addEventListener('dragstart', (e) => {
         dragSymbol = symbol;
@@ -144,7 +203,7 @@ export function initWatchlist({ onPick }) {
   const head = $('#wl-head');
   head.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
-    if (!btn) return;
+    if (!btn || editing) return;
     const key = btn.dataset.sort;
     if (sort.key !== key) sort = { key, dir: 'desc' };
     else if (sort.dir === 'desc') sort = { key, dir: 'asc' };
@@ -183,7 +242,8 @@ export function initWatchlist({ onPick }) {
     e.preventDefault();
     const idx = syms.indexOf(store.selected);
     const next = e.key === 'ArrowDown' ? (idx + 1) % syms.length : (idx - 1 + syms.length) % syms.length;
-    onPick(syms[idx < 0 ? 0 : next]);
+    // 键盘连续切换不写入历史记录，否则返回键要按很多次
+    onPick(syms[idx < 0 ? 0 : next], { replace: true });
   });
 
   render();

@@ -68,6 +68,8 @@ function startClock() {
 function applyTheme() {
   const theme = store.settings.theme ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
   document.documentElement.dataset.theme = theme;
+  // 手机浏览器地址栏 / 状态栏颜色
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#11161f' : '#ffffff');
   $('#btn-theme').innerHTML = theme === 'dark' ? icons.sun : icons.moon;
   $('#btn-theme').title = theme === 'dark' ? '切换到浅色主题' : '切换到深色主题';
 }

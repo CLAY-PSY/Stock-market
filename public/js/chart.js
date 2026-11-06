@@ -14,6 +14,7 @@ import {
   LineSeries,
   LineStyle,
   CrosshairMode,
+  TrackingModeExitMode,
 } from '../vendor/lightweight-charts.mjs';
 import { sma, boll, macd, kdj, rsi } from './indicators.js';
 import { sessionSlots, slotForTime, chartTime, minuteBucket } from './sessions.js';
@@ -99,6 +100,10 @@ export class StockChart {
     const t = readTheme();
     this.theme = t;
     this.decimals = decimals;
+    // 触屏：竖向滑动交给页面滚动；长按出现十字光标，松手即消失。分时图固定显示全天，不需要拖动缩放
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    const narrow = window.matchMedia('(max-width: 560px)').matches;
+    const fixedIntraday = touch && this.mode === 'intraday';
 
     this.chart = createChart(this.container, {
       autoSize: true,
@@ -119,8 +124,8 @@ export class StockChart {
         vertLine: { color: t.crosshair, labelBackgroundColor: t.border, style: LineStyle.Dashed },
         horzLine: { color: t.crosshair, labelBackgroundColor: t.border, style: LineStyle.Dashed },
       },
-      rightPriceScale: { borderColor: t.border, minimumWidth: 64 },
-      leftPriceScale: { visible: leftScale, borderColor: t.border, minimumWidth: 56 },
+      rightPriceScale: { borderColor: t.border, minimumWidth: narrow ? 46 : 64 },
+      leftPriceScale: { visible: leftScale, borderColor: t.border, minimumWidth: narrow ? 40 : 56 },
       timeScale: {
         borderColor: t.border,
         timeVisible: withTime,
@@ -144,7 +149,13 @@ export class StockChart {
           return multiDay || this.mode === 'kline' ? `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${hm}` : hm;
         },
       },
-      handleScale: { axisPressedMouseMove: { time: true, price: true } },
+      handleScroll: fixedIntraday
+        ? false
+        : { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: fixedIntraday
+        ? false
+        : { axisPressedMouseMove: { time: true, price: !touch }, mouseWheel: true, pinch: true, axisDoubleClickReset: true },
+      trackingMode: { exitMode: TrackingModeExitMode.OnTouchEnd },
     });
 
     this.chart.subscribeCrosshairMove((param) => this.renderLegend(param));
@@ -678,7 +689,7 @@ export class StockChart {
         <span class="lg-item">低 <b class="${dir(b.low)}">${fmtPrice(b.low, d)}</b></span>
         <span class="lg-item">收 <b class="${dir(b.close)}">${fmtPrice(b.close, d)}</b></span>
         <span class="lg-item">涨跌 <b class="${chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat'}">${fmtPct(chg)}</b></span>
-        <span class="lg-item">振幅 <b>${amp.toFixed(2)}%</b></span>
+        <span class="lg-item lg-opt">振幅 <b>${amp.toFixed(2)}%</b></span>
       </div>
       <div class="lg-row">${items(0)}</div>`;
     const unit = this.data.market === 'cn' ? '手' : '股';

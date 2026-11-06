@@ -8,8 +8,10 @@ const TYPE_LABEL = { stock: '股票', index: '指数', fund: '基金', bond: '�
 
 /**
  * 搜索框 + 「键盘精灵」：在页面任意位置直接输入代码/拼音即可唤起搜索。
+ * 窄屏下搜索框收起为顶栏按钮，点击后以全屏面板打开。
  */
-export function initSearch({ onPick }) {
+export function initSearch({ onPick, sheet }) {
+  const root = $('#search');
   const input = $('#search-input');
   const list = $('#search-results');
   let items = [];
@@ -23,6 +25,37 @@ export function initSearch({ onPick }) {
     input.setAttribute('aria-expanded', 'false');
     active = -1;
   };
+
+  /* ------------------------------------------------- 全屏搜索面板（窄屏） */
+
+  const isOverlay = () => root.classList.contains('open');
+
+  const openOverlay = () => {
+    if (isOverlay()) return;
+    root.classList.add('open');
+    document.documentElement.classList.add('sheet-open', 'search-open');
+    // iOS 只有在用户手势的同一调用栈里 focus 才会弹出键盘，所以这里同步调用
+    input.focus();
+    sheet?.open(closeOverlay);
+    if (!input.value) {
+      items = [];
+      lastQuery = '';
+      render();
+    }
+  };
+
+  function closeOverlay() {
+    if (!isOverlay()) return;
+    root.classList.remove('open');
+    document.documentElement.classList.remove('sheet-open', 'search-open');
+    input.value = '';
+    input.blur();
+    close();
+    sheet?.closed();
+  }
+
+  $('#btn-search').addEventListener('click', openOverlay);
+  $('#search-cancel').addEventListener('click', closeOverlay);
 
   const open = () => {
     list.hidden = false;
@@ -42,6 +75,7 @@ export function initSearch({ onPick }) {
     input.value = '';
     input.blur();
     close();
+    closeOverlay();
   };
 
   const render = () => {
@@ -119,7 +153,10 @@ export function initSearch({ onPick }) {
   input.addEventListener('focus', () => {
     if (input.value.trim()) render();
   });
-  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('blur', () => {
+    // 全屏面板里滚动结果列表会收起键盘（触发 blur），此时不能关掉结果
+    if (!isOverlay()) setTimeout(close, 120);
+  });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -132,11 +169,20 @@ export function initSearch({ onPick }) {
       if (items[active]) pick(items[active]);
       else if (input.value.trim()) query(input.value.trim()).then(() => items[0] && pick(items[0]));
     } else if (e.key === 'Escape') {
+      if (isOverlay()) return closeOverlay();
       input.value = '';
       input.blur();
       close();
     }
+    return undefined;
   });
+
+  // 窄屏下搜索框收起为按钮，需要先打开全屏面板
+  const collapsed = () => getComputedStyle($('#btn-search')).display !== 'none';
+  const focusSearch = () => {
+    if (collapsed()) openOverlay();
+    else input.focus();
+  };
 
   // 键盘精灵：不在输入框内时，直接键入字母 / 数字开始搜索；按 / 聚焦搜索框
   document.addEventListener('keydown', (e) => {
@@ -145,11 +191,11 @@ export function initSearch({ onPick }) {
     if (target.closest?.('input, textarea, select, [contenteditable], dialog[open]')) return;
     if (e.key === '/') {
       e.preventDefault();
-      input.focus();
+      focusSearch();
       input.select();
     } else if (/^[a-zA-Z0-9]$/.test(e.key)) {
       e.preventDefault();
-      input.focus();
+      focusSearch();
       input.value = e.key;
       input.dispatchEvent(new Event('input'));
     }

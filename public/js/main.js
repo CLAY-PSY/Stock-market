@@ -14,6 +14,7 @@ import { initRank } from './components/rank.js';
 import { initAlerts } from './components/alerts.js';
 import { initChartPanel } from './components/chart-panel.js';
 import { toast } from './components/toast.js';
+import { initMobileNav, isMobile } from './components/mobile-nav.js';
 
 const SYMBOL_RE = /^((sh|sz|bj)\d{6}|hk(\d{5}|[A-Z]{2,8})|us[A-Z]{1,8}(\.[A-Z])?)$/;
 
@@ -22,11 +23,27 @@ function symbolFromHash() {
   return SYMBOL_RE.test(raw) ? raw : null;
 }
 
-/** 选中某只股票：通过 hash 路由，使浏览器前进 / 后退与分享链接都可用 */
-function pick(symbol) {
+let nav = null;
+
+/**
+ * 选中某只股票。通过 hash 路由，浏览器前进 / 后退与分享链接都可用。
+ * 手机上从列表（自选 / 排行 / 搜索 / 提醒）进入时切到「行情」视图并新增一条历史记录，返回键回到列表；
+ * 如果当前处在搜索 / 提醒面板上，则替换面板那条记录，避免返回时多停一次。
+ */
+function pick(symbol, { replace = false } = {}) {
   if (!symbol) return;
-  if (symbolFromHash() === symbol) store.select(symbol);
-  else location.hash = `#/${symbol}`;
+  const fromList = isMobile() && nav.view !== 'quote';
+  const overSheet = Boolean(history.state?.sheet);
+  const sameSymbol = symbolFromHash() === symbol;
+  const write = (state) =>
+    (replace || overSheet ? history.replaceState : history.pushState).call(history, state, '', `#/${symbol}`);
+  if (fromList) {
+    write({ view: 'quote' });
+    nav.apply('quote');
+  } else if (!sameSymbol || overSheet) {
+    write({ view: nav.view });
+  }
+  store.select(symbol);
 }
 
 /**
@@ -64,23 +81,40 @@ if (mode === 'static') {
 const initial = symbolFromHash();
 if (initial) store.selected = initial;
 
+nav = initMobileNav({ hasInitialSymbol: Boolean(initial) });
+
 let chartPanel;
 initHeader({ onThemeChange: () => chartPanel?.refreshTheme() });
-initSearch({ onPick: pick });
+initSearch({
+  onPick: pick,
+  sheet: {
+    open: (close) => nav.openSheet('search', close),
+    closed: () => nav.sheetClosed('search'),
+  },
+});
 initTicker({ onPick: pick });
 initWatchlist({ onPick: pick });
-const alerts = initAlerts({ onPick: pick });
+const alerts = initAlerts({
+  onPick: pick,
+  onDrawerChange: (open) => (open ? nav.openSheet('alerts', () => alerts.closeDrawer()) : nav.sheetClosed('alerts')),
+});
+nav.onChange((view) => {
+  if (view === 'alerts') alerts.openDrawer();
+});
 initQuotePanel({ onAlert: (symbol) => alerts.openDialog(symbol) });
 initOrderbook();
 initTicks();
 initRank({ onPick: pick });
 chartPanel = initChartPanel();
 
-window.addEventListener('hashchange', () => {
+// 前进 / 后退、手动修改地址栏中的代码
+const syncFromHash = () => {
   const s = symbolFromHash();
   if (s) store.select(s);
-});
-if (!initial) history.replaceState(null, '', `#/${store.selected}`);
+};
+window.addEventListener('popstate', syncFromHash);
+window.addEventListener('hashchange', syncFromHash);
+if (!initial) history.replaceState({ ...(history.state ?? {}), view: nav.view }, '', `#/${store.selected}`);
 
 /* -------------------------------------------------------------- realtime */
 

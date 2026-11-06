@@ -46,7 +46,7 @@ function suggestValue(type, q) {
   return fmtPrice(q.price * factor, q.decimals);
 }
 
-export function initAlerts({ onPick }) {
+export function initAlerts({ onPick, onDrawerChange = () => {} }) {
   const drawer = $('#alerts-drawer');
   const scrim = $('#scrim');
   const listEl = $('#alert-list');
@@ -59,26 +59,52 @@ export function initAlerts({ onPick }) {
   const helpEl = $('#alert-help');
   const errorEl = $('#alert-error');
   const soundEl = $('#alert-sound');
+  const tabBadge = $('#tab-alerts-badge');
   let dialogSymbol = null;
+
+  /* <dialog> 兼容：iOS Safari 15.4 以下没有 showModal，退化为普通浮层 */
+  const nativeDialog = typeof dialog.showModal === 'function';
+  const isDialogOpen = () => dialog.hasAttribute('open');
+  const showDialog = () => {
+    if (isDialogOpen()) return;
+    if (nativeDialog) dialog.showModal();
+    else {
+      dialog.classList.add('dialog-fallback');
+      dialog.setAttribute('open', '');
+    }
+  };
+  const hideDialog = () => {
+    if (nativeDialog) dialog.close();
+    else dialog.removeAttribute('open');
+  };
 
   /* ------------------------------------------------------------ drawer */
 
   const openDrawer = () => {
+    if (!drawer.hidden) return;
     drawer.hidden = false;
     scrim.hidden = false;
+    document.documentElement.classList.add('sheet-open');
     renderList();
-    drawer.querySelector('[data-close]').focus();
+    drawer.querySelector('[data-close]').focus({ preventScroll: true });
+    onDrawerChange(true);
   };
   const closeDrawer = () => {
+    if (drawer.hidden) return;
     drawer.hidden = true;
     scrim.hidden = true;
+    document.documentElement.classList.remove('sheet-open');
+    onDrawerChange(false);
   };
 
   $('#btn-alerts').addEventListener('click', openDrawer);
   drawer.querySelector('[data-close]').addEventListener('click', closeDrawer);
   scrim.addEventListener('click', closeDrawer);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !drawer.hidden && !dialog.open) closeDrawer();
+    if (e.key !== 'Escape') return;
+    if (isDialogOpen()) {
+      if (!nativeDialog) hideDialog(); // 原生 dialog 自己处理 Esc
+    } else if (!drawer.hidden) closeDrawer();
   });
   $('#btn-new-alert').addEventListener('click', () => openDialog(store.selected));
   soundEl.checked = store.settings.sound;
@@ -86,8 +112,11 @@ export function initAlerts({ onPick }) {
 
   const renderBadge = () => {
     const n = store.alerts.filter((a) => a.active).length;
-    badge.hidden = n === 0;
-    badge.textContent = String(n);
+    for (const el of [badge, tabBadge]) {
+      if (!el) continue;
+      el.hidden = n === 0;
+      el.textContent = String(n);
+    }
   };
 
   const renderList = () => {
@@ -154,8 +183,8 @@ export function initAlerts({ onPick }) {
     valueEl.step = q ? String(10 ** -q.decimals) : 'any';
     noteEl.value = '';
     updateHelp();
-    if (!dialog.open) dialog.showModal();
-    valueEl.focus();
+    showDialog();
+    valueEl.focus({ preventScroll: true });
     valueEl.select();
   }
 
@@ -166,7 +195,7 @@ export function initAlerts({ onPick }) {
     updateHelp();
   });
   valueEl.addEventListener('input', updateHelp);
-  dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+  dialog.querySelector('[data-close]').addEventListener('click', hideDialog);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -177,7 +206,7 @@ export function initAlerts({ onPick }) {
       return;
     }
     store.addAlert({ symbol: dialogSymbol, type: typeEl.value, value: Number(valueEl.value), note: noteEl.value.trim() });
-    dialog.close();
+    hideDialog();
     toast(`${store.nameOf(dialogSymbol)}：${describeAlert({ type: typeEl.value, value: Number(valueEl.value) })}`, {
       kind: 'success',
       title: '提醒已创建',
@@ -218,5 +247,5 @@ export function initAlerts({ onPick }) {
   store.on('alerts', renderList);
   renderBadge();
 
-  return { openDialog };
+  return { openDialog, openDrawer, closeDrawer, isDrawerOpen: () => !drawer.hidden };
 }
