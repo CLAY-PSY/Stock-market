@@ -1,0 +1,22 @@
+{
+  "name": "stock-market",
+  "version": "1.0.0",
+  "description": "实时股票行情看板：A股 / 港股 / 美股实时报价、分时与K线、盘口、逐笔、排行、自选与价格提醒",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "demo": "DATA_PROVIDER=mock node server/index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.3.0",
+    "lightweight-charts": "^5.2.1",
+    "ws": "^8.22.1"
+  }
+}
