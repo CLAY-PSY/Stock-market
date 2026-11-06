@@ -1,5 +1,5 @@
 import { $, h, flash, icons } from '../dom.js';
-import { store } from '../store.js';
+import { store, MAX_WATCHLIST } from '../store.js';
 import {
   fmtPrice,
   fmtChange,
@@ -19,6 +19,9 @@ import { toast } from './toast.js';
 
 const TYPE_LABEL = { stock: '股票', index: '指数', fund: '基金', bond: '债券' };
 
+/** 百分比指标：没有数据时显示 --（不带 %） */
+const pct = (v) => (typeof v === 'number' && Number.isFinite(v) ? `${fmtNum(v)}%` : '--');
+
 /** 根据市场 / 品种挑选要展示的指标 */
 function statsFor(q) {
   const d = q.decimals;
@@ -34,10 +37,10 @@ function statsFor(q) {
     // 数据源不提供的项不显示（例如港股指数没有成交股数、美股指数没有可靠的成交额）
     q.volume === null || q.volume === undefined ? null : ['成交量', plain(fmtVolume(q.volume, q.market))],
     q.amount === null || q.amount === undefined ? null : ['成交额', plain(fmtBig(q.amount) + (q.amount ? cur : ''))],
-    ['振幅', plain(q.amplitude === null ? '--' : `${fmtNum(q.amplitude)}%`)],
+    ['振幅', plain(pct(q.amplitude))],
   ].filter(Boolean);
   if (!isIndex) {
-    list.push(['换手率', plain(q.turnoverRate === null || q.turnoverRate === undefined ? '--' : `${fmtNum(q.turnoverRate)}%`)]);
+    list.push(['换手率', plain(pct(q.turnoverRate))]);
     list.push(['市盈率TTM', plain(q.pe ? fmtNum(q.pe) : '--')]);
     if (q.pb !== undefined) list.push(['市净率', plain(q.pb ? fmtNum(q.pb) : '--')]);
     list.push(['总市值', plain(fmtBig(q.marketCap) + (q.marketCap ? cur : ''))]);
@@ -49,7 +52,7 @@ function statsFor(q) {
     list.push(['跌停', { text: fmtPrice(q.limitDown, d), dir: 'down' }]);
     list.push(['量比', plain(fmtNum(q.volumeRatio))]);
   }
-  if (q.dividendYield) list.push(['股息率', plain(`${fmtNum(q.dividendYield)}%`)]);
+  if (q.dividendYield) list.push(['股息率', plain(pct(q.dividendYield))]);
   list.push(['52周最高', plain(fmtPrice(q.high52w, d))]);
   list.push(['52周最低', plain(fmtPrice(q.low52w, d))]);
   return list;
@@ -121,8 +124,9 @@ export function initQuotePanel({ onAlert }) {
       if (store.inWatchlist(symbol)) {
         store.removeFromWatchlist(symbol);
         toast(`已将 ${nm} 移出自选`, { duration: 2000 });
+      } else if (store.addToWatchlist(symbol, nm) === 'full') {
+        toast(`自选股最多 ${MAX_WATCHLIST} 只，请先移除一些`, { kind: 'warn', duration: 3000 });
       } else {
-        store.addToWatchlist(symbol, nm);
         toast(`已将 ${nm} 加入自选`, { kind: 'success', duration: 2000 });
       }
     });

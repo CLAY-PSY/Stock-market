@@ -16,6 +16,23 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * 静态部署的内容安全策略：脚本只允许同源；浏览器直连的行情接口逐个列出；
+ * 没有 CORS 的接口在同源的 sandbox iframe（jsonp-frame.html）里加载，见 public/js/data/direct-provider.js。
+ */
+export const STATIC_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://qt.gtimg.cn https://web.ifzq.gtimg.cn https://ifzq.gtimg.cn https://proxy.finance.qq.com",
+  "frame-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
 const require = createRequire(import.meta.url);
 
 export async function buildStatic(outDir = path.join(root, 'dist')) {
@@ -41,8 +58,16 @@ export async function buildStatic(outDir = path.join(root, 'dist')) {
   const indexPath = path.join(out, 'index.html');
   const html = await readFile(indexPath, 'utf8');
   const marker = '<meta name="stockpulse-mode" content="auto" />';
+  const charset = '<meta charset="utf-8" />';
   if (!html.includes(marker)) throw new Error('index.html 中缺少 stockpulse-mode 标记');
-  await writeFile(indexPath, html.replace(marker, '<meta name="stockpulse-mode" content="static" />'));
+  if (!html.includes(charset)) throw new Error('index.html 中缺少 charset 声明');
+  await writeFile(
+    indexPath,
+    html
+      .replace(marker, '<meta name="stockpulse-mode" content="static" />')
+      // 静态托管（GitHub Pages）无法设置响应头，用 <meta> 声明内容安全策略
+      .replace(charset, `${charset}\n    <meta http-equiv="Content-Security-Policy" content="${STATIC_CSP}" />`),
+  );
 
   // 关闭 GitHub Pages 的 Jekyll 处理，避免以下划线开头的文件被忽略
   await writeFile(path.join(out, '.nojekyll'), '');

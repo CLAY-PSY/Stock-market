@@ -78,3 +78,22 @@ test('拒绝危险的输出目录', async () => {
   await assert.rejects(() => buildStatic(path.resolve('.')), /拒绝/);
   await assert.rejects(() => buildStatic(os.homedir()), /拒绝/);
 });
+
+test('静态页面声明内容安全策略，第三方脚本在 sandbox iframe 中加载', async () => {
+  const html = await readFile(path.join(out, 'index.html'), 'utf8');
+  const m = /<meta http-equiv="Content-Security-Policy" content="([^"]+)" \/>/.exec(html);
+  assert.ok(m, '缺少 CSP meta');
+  assert.ok(html.indexOf(m[0]) < html.indexOf('<script'), 'CSP 必须出现在所有脚本之前');
+  const csp = m[1];
+  assert.match(csp, /script-src 'self';/);
+  assert.match(csp, /object-src 'none'/);
+  assert.doesNotMatch(csp, /unsafe-eval/);
+  for (const host of ['qt.gtimg.cn', 'web.ifzq.gtimg.cn', 'proxy.finance.qq.com']) assert.ok(csp.includes(`https://${host}`), host);
+
+  const frame = await readFile(path.join(out, 'jsonp-frame.html'), 'utf8');
+  assert.match(frame, /<script src="js\/jsonp-frame.js"><\/script>/);
+  assert.ok(await exists(path.join(out, 'js/jsonp-frame.js')));
+  const provider = await readFile(path.join(out, 'js/data/direct-provider.js'), 'utf8');
+  assert.match(provider, /setAttribute\('sandbox', 'allow-scripts'\)/, 'iframe 不能带 allow-same-origin');
+  assert.doesNotMatch(provider, /allow-same-origin/);
+});

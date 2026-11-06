@@ -1,5 +1,5 @@
 import { $, h, icons } from '../dom.js';
-import { store } from '../store.js';
+import { store, MAX_ALERTS } from '../store.js';
 import { fmtPrice, fmtPct, displayCode } from '../format.js';
 import { ALERT_TYPES, describeAlert, evaluateAlert, validateAlertInput } from '../alert-rules.js';
 import { toast } from './toast.js';
@@ -205,13 +205,25 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
       valueEl.focus();
       return;
     }
-    store.addAlert({ symbol: dialogSymbol, type: typeEl.value, value: Number(valueEl.value), note: noteEl.value.trim() });
+    const created = store.addAlert({
+      symbol: dialogSymbol,
+      type: typeEl.value,
+      value: Number(valueEl.value),
+      note: noteEl.value.trim(),
+    });
+    if (!created) {
+      errorEl.textContent = `提醒最多 ${MAX_ALERTS} 条，请先删除不需要的提醒`;
+      return;
+    }
     hideDialog();
-    toast(`${store.nameOf(dialogSymbol)}：${describeAlert({ type: typeEl.value, value: Number(valueEl.value) })}`, {
+    toast(`${store.nameOf(dialogSymbol)}：${describeAlert(created)}`, {
       kind: 'success',
       title: '提醒已创建',
       duration: 3000,
     });
+    // 条件可能已经满足，立即检查一次（不等待通知授权弹窗，用户可能迟迟不点）
+    const q = store.quotes.get(dialogSymbol);
+    if (q) check([{ quote: q }]);
     if ('Notification' in window && Notification.permission === 'default') {
       try {
         await Notification.requestPermission();
@@ -219,9 +231,6 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
         /* ignore */
       }
     }
-    // 条件可能已经满足，立即检查一次
-    const q = store.quotes.get(dialogSymbol);
-    if (q) check([{ quote: q }]);
   });
 
   /* ------------------------------------------------------------ trigger */

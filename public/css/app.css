@@ -12,8 +12,12 @@
   --gap: 10px;
   --topbar-h: 56px;
 
-  --red: #e0303a;
-  --green: #0f9b58;
+  /* 文字色均满足 WCAG AA（与面板、选中行背景对比度 ≥ 4.5:1） */
+  --red: #d0232e;
+  --green: #077b44;
+  /* 实心色块（白字）用的底色 */
+  --red-fill: #d0232e;
+  --green-fill: #077b44;
   color-scheme: light;
   --bg: #eef1f5;
   --panel: #ffffff;
@@ -23,9 +27,10 @@
   --border-strong: #cfd6e0;
   --text: #121826;
   --text-2: #4a5568;
-  --text-3: #7c8799;
-  --accent: #2a78d6;
-  --accent-soft: rgba(42, 120, 214, 0.1);
+  --text-3: #5f6a7d;
+  --accent: #1d6ac8;
+  --accent-fill: #1d6ac8;
+  --accent-soft: rgba(29, 106, 200, 0.1);
   --chart-grid: #f0f2f6;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
   --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.18);
@@ -33,14 +38,17 @@
   --series-2: #eda100;
   --series-3: #e87ba4;
   --series-4: #6250d6;
-  --warn: #b7791f;
+  --warn: #946014;
   --warn-bg: #fff7e6;
+  --tag-hk: #ad3a0b;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --red: #f0464a;
+  --red: #f45b5f;
   --green: #1fae6b;
+  --red-fill: #d22f36;
+  --green-fill: #118049;
   --bg: #0a0d13;
   --panel: #11161f;
   --panel-2: #161c27;
@@ -49,9 +57,10 @@
   --border-strong: #2c3647;
   --text: #e8ebf1;
   --text-2: #a4adbd;
-  --text-3: #6d778a;
-  --accent: #3987e5;
-  --accent-soft: rgba(57, 135, 229, 0.14);
+  --text-3: #8690a2;
+  --accent: #4a92ea;
+  --accent-fill: #256bc2;
+  --accent-soft: rgba(74, 146, 234, 0.14);
   --chart-grid: #171d28;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
@@ -61,6 +70,7 @@
   --series-4: #9085e9;
   --warn: #f2b84b;
   --warn-bg: rgba(242, 184, 75, 0.12);
+  --tag-hk: #fb923c;
 }
 
 /* 红涨绿跌（默认）/ 绿涨红跌 */
@@ -68,10 +78,14 @@
 :root[data-updown='cn'] {
   --up: var(--red);
   --down: var(--green);
+  --up-fill: var(--red-fill);
+  --down-fill: var(--green-fill);
 }
 :root[data-updown='intl'] {
   --up: var(--green);
   --down: var(--red);
+  --up-fill: var(--green-fill);
+  --down-fill: var(--red-fill);
 }
 :root {
   --up-soft: color-mix(in srgb, var(--up) 16%, transparent);
@@ -352,15 +366,12 @@ svg {
   letter-spacing: 0.3px;
 }
 .tag-HK {
-  color: #c2410c;
+  color: var(--tag-hk);
   background: rgba(234, 88, 12, 0.12);
 }
 .tag-US {
   color: var(--accent);
   background: var(--accent-soft);
-}
-:root[data-theme='dark'] .tag-HK {
-  color: #fb923c;
 }
 
 .market-status {
@@ -476,7 +487,7 @@ svg {
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   font-size: 10px;
   line-height: 16px;
@@ -505,6 +516,18 @@ svg {
 }
 .ticker::-webkit-scrollbar {
   display: none;
+}
+.ticker.fade-right {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent);
+}
+.ticker.fade-left {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 56px);
+  mask-image: linear-gradient(to right, transparent, #000 56px);
+}
+.ticker.fade-left.fade-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent);
 }
 .tk {
   flex: 1 0 auto;
@@ -776,11 +799,11 @@ svg {
   background: var(--text-3);
 }
 .wl-chg.up {
-  background: var(--up);
+  background: var(--up-fill);
   color: #fff;
 }
 .wl-chg.down {
-  background: var(--down);
+  background: var(--down-fill);
   color: #fff;
 }
 .wl-chg.flat {
@@ -980,12 +1003,12 @@ svg {
   height: 15px;
 }
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: #fff;
 }
 .btn-primary:hover {
-  background: color-mix(in srgb, var(--accent) 88%, #000);
+  background: color-mix(in srgb, var(--accent-fill) 88%, #000);
 }
 .btn.on svg {
   fill: var(--series-2);
@@ -1442,6 +1465,7 @@ svg {
   flex-direction: column;
   gap: 5px;
   flex: 1;
+  min-width: 0; /* 允许收缩：数字输入框有较大的默认最小宽度，窄屏下会撑出弹窗 */
 }
 .field-row {
   display: flex;
@@ -1453,6 +1477,8 @@ svg {
 }
 .field input,
 .field select {
+  width: 100%;
+  min-width: 0;
   height: 36px;
   padding: 0 10px;
   border-radius: 8px;
@@ -1637,6 +1663,11 @@ select,
   }
   .chart-overlay {
     background: rgba(127, 127, 127, 0.18);
+  }
+  /* 否则悬停时会落到 .btn:hover 的浅灰底色上，白字看不清 */
+  .btn-primary:hover {
+    background: var(--accent-fill);
+    filter: brightness(0.9);
   }
 }
 
@@ -2153,7 +2184,8 @@ select,
     background: var(--panel);
     border-top: 1px solid var(--border);
   }
-  @supports (backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px)) {
+  /* 半透明底色依赖 color-mix()：iOS 15 / 16.0 支持毛玻璃但不支持 color-mix，那里保持不透明底色 */
+  @supports ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) and (color: color-mix(in srgb, red 50%, blue)) {
     .tabbar {
       background: color-mix(in srgb, var(--panel) 86%, transparent);
       -webkit-backdrop-filter: saturate(160%) blur(14px);

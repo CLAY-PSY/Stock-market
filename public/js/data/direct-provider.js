@@ -3,7 +3,8 @@
  *
  * 与服务端共用 shared/tencent.js 中的解析与业务逻辑，只替换网络访问方式：
  * - 报价 / 分时 / K 线 / 排行接口返回了 Access-Control-Allow-Origin: *，直接 fetch；
- * - 搜索与逐笔成交接口没有 CORS 头，但返回 `v_xxx=...` 形式的 JS，用 <script> 标签加载后读取全局变量。
+ * - 搜索与逐笔成交接口没有 CORS 头，但返回 `v_xxx=...` 形式的 JS：在隔离的 sandbox iframe 中
+ *   用 <script> 标签加载后读取全局变量，再以纯数据传回（见 jsonp-frame.html）。
  */
 import { createTencentProvider } from '../../shared/tencent.js';
 import { UpstreamError } from '../../shared/errors.js';
@@ -40,49 +41,69 @@ async function json(url) {
   }
 }
 
-/* 同名全局变量的请求必须串行，否则后一个脚本会覆盖前一个的结果 */
-const scriptQueues = new Map();
+/*
+ * 没有 CORS 的接口以 <script> 方式加载。第三方脚本不放在主页面里执行，而是交给一个
+ * sandbox="allow-scripts" 的 iframe（jsonp-frame.html，独立的不透明源）：
+ * 它拿不到本页面的 DOM、Cookie 与 localStorage，结果只以纯数据的形式通过 postMessage 传回。
+ */
+const FRAME_READY_TIMEOUT_MS = 8_000;
+const pending = new Map(); // 请求 id → { resolve, reject, timer, url }
+let frameReady = null;
+let seq = 0;
 
-function clearGlobal(name) {
-  try {
-    delete window[name];
-  } catch {
-    window[name] = undefined;
-  }
+function getFrame() {
+  if (frameReady) return frameReady;
+  frameReady = new Promise((resolve, reject) => {
+    const el = document.createElement('iframe');
+    el.setAttribute('sandbox', 'allow-scripts');
+    el.setAttribute('aria-hidden', 'true');
+    el.setAttribute('tabindex', '-1');
+    el.title = '行情数据通道';
+    el.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+    const onMessage = (ev) => {
+      if (ev.source !== el.contentWindow || !ev.source) return;
+      const data = ev.data;
+      if (data?.ready) {
+        clearTimeout(readyTimer);
+        resolve(el);
+        return;
+      }
+      const req = pending.get(data?.id);
+      if (!req) return;
+      pending.delete(data.id);
+      clearTimeout(req.timer);
+      if (data.ok) req.resolve(data.value ?? null);
+      else req.reject(new UpstreamError('无法连接行情接口', { url: req.url }));
+    };
+    const readyTimer = setTimeout(() => {
+      window.removeEventListener('message', onMessage);
+      el.parentNode?.removeChild(el);
+      frameReady = null; // 下次请求时重建
+      reject(new UpstreamError('行情数据通道加载失败'));
+    }, FRAME_READY_TIMEOUT_MS);
+    window.addEventListener('message', onMessage);
+    el.src = new URL('jsonp-frame.html', document.baseURI).href;
+    document.body.append(el);
+  });
+  return frameReady;
 }
 
-function loadScriptOnce(url, name) {
+async function loadScriptOnce(url, name) {
+  const frame = await getFrame();
   return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    let timer = null;
-    const done = () => {
-      clearTimeout(timer);
-      el.onload = null;
-      el.onerror = null;
-      el.parentNode?.removeChild(el);
-    };
-    timer = setTimeout(() => {
-      done();
-      clearGlobal(name);
+    seq += 1;
+    const id = seq;
+    const timer = setTimeout(() => {
+      pending.delete(id);
       reject(new UpstreamError('行情接口请求超时', { url }));
     }, TIMEOUT_MS);
-    el.onload = () => {
-      const value = window[name];
-      done();
-      clearGlobal(name);
-      resolve(value ?? null);
-    };
-    el.onerror = () => {
-      done();
-      reject(new UpstreamError('无法连接行情接口', { url }));
-    };
-    el.async = true;
-    el.referrerPolicy = 'no-referrer';
-    el.src = url;
-    clearGlobal(name);
-    document.head.append(el);
+    pending.set(id, { resolve, reject, timer, url });
+    frame.contentWindow.postMessage({ id, url, name }, '*');
   });
 }
+
+/* 同名全局变量的请求必须串行，否则后一个脚本会覆盖前一个的结果 */
+const scriptQueues = new Map();
 
 function script(url, name) {
   const previous = scriptQueues.get(name) ?? Promise.resolve();

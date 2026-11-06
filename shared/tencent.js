@@ -33,6 +33,9 @@ export const num = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** Object.hasOwn 的兼容写法（iOS 15.4 以下没有 Object.hasOwn） */
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
 const scale = (v, factor) => (v === null ? null : Math.round(v * factor * 100) / 100);
 const round = (v, digits = 4) => (v === null ? null : Math.round(v * 10 ** digits) / 10 ** digits);
 
@@ -320,9 +323,10 @@ export function parseKlineRows(rows, { market, minute = false }) {
     const high = num(h);
     const low = num(l);
     if ([open, close, high, low].some((x) => x === null)) continue;
+    const ts = String(t);
     const time = minute
-      ? `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)} ${t.slice(8, 10)}:${t.slice(10, 12)}`
-      : String(t).slice(0, 10);
+      ? `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)} ${ts.slice(8, 10)}:${ts.slice(10, 12)}`
+      : ts.slice(0, 10);
     bars.push({ time, open, high, low, close, volume: (num(v) ?? 0) * volFactor });
   }
   return bars;
@@ -395,6 +399,18 @@ export function parseMobileRankItems(list) {
 /* ------------------------------------------------------------------ search */
 
 const SEARCH_MARKETS = new Set(['sh', 'sz', 'bj', 'hk', 'us']);
+
+/**
+ * 搜索关键字只保留文字、数字、空格和 . - 等代码里会出现的字符：
+ * 尖括号、引号之类的字符对搜索没有意义，还会被上游的防火墙直接拒绝（HTTP 501）。
+ */
+export function sanitizeSearchQuery(query) {
+  return String(query ?? '')
+    .replace(/[^\p{L}\p{N}\s.\-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 32);
+}
 
 export function parseSearchResponse(text) {
   return parseSearchValue(extractJsVar(text, 'v_hint'));
@@ -570,8 +586,9 @@ export function createTencentProvider(io, { name = 'tencent', label = '腾讯财
 
   async function getRank({ board = 'all', sort = 'changePct', order = 'desc', offset = 0, count = 20 } = {}) {
     if (mobileRank) return getMobileRank({ board, sort, order, offset, count });
-    const sortType = RANK_SORT[sort];
-    const boardCode = RANK_BOARDS[board];
+    // 只认自有属性，避免 sort=constructor / __proto__ 之类的参数命中原型链
+    const sortType = hasOwn(RANK_SORT, sort) ? RANK_SORT[sort] : null;
+    const boardCode = hasOwn(RANK_BOARDS, board) ? RANK_BOARDS[board] : null;
     if (!sortType) throw new NotSupportedError(`不支持的排序字段 ${sort}`);
     if (!boardCode) throw new NotSupportedError(`不支持的板块 ${board}`);
     const direct = order === 'asc' ? 'up' : 'down';
@@ -602,7 +619,7 @@ export function createTencentProvider(io, { name = 'tencent', label = '腾讯财
   }
 
   async function search(query) {
-    const q = String(query ?? '').trim().slice(0, 32);
+    const q = sanitizeSearchQuery(query);
     if (!q) return [];
     return cache.wrap(`search:${q.toLowerCase()}`, 10 * 60_000, async () =>
       parseSearchValue(await io.script(`${SMARTBOX}?v=2&t=all&q=${encodeURIComponent(q)}`, 'v_hint')).slice(0, 15),

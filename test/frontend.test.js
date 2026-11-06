@@ -119,3 +119,9 @@ test('价格提醒规则', () => {
   assert.equal(validateAlertInput('priceAbove', 'abc'), '请输入有效的数值');
   assert.equal(validateAlertInput('pctAbove', '5'), null);
 });
+
+test('价格提醒：缺少价格 / 涨跌幅时不触发', () => {
+  assert.equal(evaluateAlert({ active: true, type: 'priceBelow', value: 10 }, { price: null, changePct: 1 }), false);
+  assert.equal(evaluateAlert({ active: true, type: 'pctBelow', value: 1 }, { price: 9, changePct: null }), false);
+  assert.equal(evaluateAlert({ active: true, type: 'priceBelow', value: 10 }, { price: 9, changePct: null }), true);
+});

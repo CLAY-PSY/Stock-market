@@ -19,7 +19,12 @@ import { initMobileNav, isMobile } from './components/mobile-nav.js';
 const SYMBOL_RE = /^((sh|sz|bj)\d{6}|hk(\d{5}|[A-Z]{2,8})|us[A-Z]{1,8}(\.[A-Z])?)$/;
 
 function symbolFromHash() {
-  const raw = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
+  let raw;
+  try {
+    raw = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
+  } catch {
+    return null; // 地址栏里的 hash 不是合法的百分号编码（例如 #/%E0%A4%A）
+  }
   return SYMBOL_RE.test(raw) ? raw : null;
 }
 
@@ -158,6 +163,13 @@ rt.on('hello', (msg) => {
 rt.on('quotes', (msg) => store.applyQuotes(msg.data ?? []));
 rt.on('unknown', (msg) => store.markUnknown(msg.symbols ?? []));
 rt.on('market', (msg) => setMarket(msg.data));
+// 服务端的提示（例如订阅数量达到上限）：节流显示，避免刷屏
+let lastServerNotice = 0;
+rt.on('error', (msg) => {
+  if (!msg.message || Date.now() - lastServerNotice < 30_000) return;
+  lastServerNotice = Date.now();
+  toast(String(msg.message).slice(0, 120), { kind: 'warn', duration: 4000 });
+});
 rt.on('upstream', (msg) => {
   upstreamMessage = msg.ok ? null : msg.message || '未知错误';
   renderBanner();
@@ -191,9 +203,13 @@ function startFallback() {
   if (fallbackTimer) return;
   const poll = async () => {
     try {
-      const res = await api.quotes(store.subscriptionSet());
-      store.applyQuotes(res.data ?? []);
-      if (res.missing?.length) store.markUnknown(res.missing);
+      // 服务端单次最多接受 200 个代码，分批请求
+      const symbols = store.subscriptionSet();
+      for (let i = 0; i < symbols.length; i += 150) {
+        const res = await api.quotes(symbols.slice(i, i + 150));
+        store.applyQuotes(res.data ?? []);
+        if (res.missing?.length) store.markUnknown(res.missing);
+      }
       if (!store.market) setMarket(await api.marketStatus());
     } catch {
       /* 服务器也不可达时保持静默，连接指示器已提示 */

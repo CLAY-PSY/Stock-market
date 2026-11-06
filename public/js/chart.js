@@ -331,7 +331,9 @@ export class StockChart {
     this.addLegend(1);
     // 显示完整交易时段（含尚未到来的时间）。注意不能用 fixRightEdge：它会把右边界钉在最后一个有数据的点上
     this.chart.timeScale().applyOptions({ fixLeftEdge: true, lockVisibleTimeRangeOnResize: true });
-    this.chart.timeScale().setVisibleLogicalRange({ from: 0, to: Math.max(1, axis.length - 1) });
+    // 右侧留一点空白，否则收盘时刻（15:00 / 16:00）的刻度文字会被截掉一半
+    const rightPad = Math.max(3, Math.round(axis.length * 0.025));
+    this.chart.timeScale().setVisibleLogicalRange({ from: 0, to: Math.max(1, axis.length - 1 + rightPad) });
 
     // 实时更新所需的状态
     const last = points.at(-1);

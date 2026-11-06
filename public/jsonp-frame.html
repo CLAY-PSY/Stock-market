@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <title>StockPulse data frame</title>
+    <!--
+      静态部署（GitHub Pages）时，搜索与逐笔成交接口没有 CORS，只能以 <script> 方式加载。
+      这些第三方脚本放在这个 sandbox="allow-scripts" 的 iframe 里执行（独立的不透明源），
+      拿不到主页面的 DOM、Cookie 与 localStorage，结果只通过 postMessage 以纯数据形式传回。
+    -->
+    <script src="js/jsonp-frame.js"></script>
+  </head>
+  <body></body>
+</html>

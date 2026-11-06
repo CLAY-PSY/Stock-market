@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import express from 'express';
 import { normalizeSymbol, parseSymbolList } from '../shared/symbols.js';
+import { UpstreamError } from '../shared/errors.js';
 import { logger } from './lib/logger.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,8 @@ export function createApp({ provider, hub }) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
     res.setHeader(
       'Content-Security-Policy',
       [
@@ -79,7 +82,9 @@ export function createApp({ provider, hub }) {
         "img-src 'self' data:",
         "connect-src 'self' ws: wss:",
         "font-src 'self' data:",
+        "object-src 'none'",
         "base-uri 'self'",
+        "form-action 'self'",
         "frame-ancestors 'self'",
       ].join('; '),
     );
@@ -183,17 +188,24 @@ export function createApp({ provider, hub }) {
     }),
   );
 
-  // 未匹配的页面路由回落到首页（前端用 hash 路由，这里只是兜底）
+  // 未匹配的页面路由回落到首页（前端用 hash 路由，这里只是兜底）。
+  // 带扩展名的路径是缺失的静态资源，返回 404，而不是用 200 的 HTML 冒充脚本 / 样式
   app.use((req, res, next) => {
-    if (req.method !== 'GET' || !req.accepts('html')) return next();
+    if (req.method !== 'GET' || path.extname(req.path) || req.accepts(['html', 'json']) !== 'html') return next();
     return sendIndex(req, res);
   });
+  app.use((req, res) => res.status(404).type('text/plain').send('Not Found'));
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
-    const status = err.status && err.status >= 400 && err.status < 600 ? err.status : 502;
-    if (status >= 500) logger.warn(`${req.method} ${req.originalUrl} -> ${status}: ${err.message}`);
-    res.status(status).json({ error: err.message || '服务器内部错误', code: err.name });
+    const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 502;
+    // 4xx 与上游错误的提示是给用户看的；其它服务端异常只记录日志，不把内部细节返回给客户端
+    const expose = status < 500 || err instanceof UpstreamError;
+    if (status >= 500) logger.warn(`${req.method} ${req.originalUrl} -> ${status}: ${err.stack || err.message}`);
+    res.status(status).json({
+      error: expose ? err.message || '请求失败' : '服务器内部错误',
+      code: expose ? err.name : 'InternalError',
+    });
   });
 
   return app;
