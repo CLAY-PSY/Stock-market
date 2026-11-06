@@ -64,6 +64,16 @@ test('参数校验与错误码', async () => {
   assert.equal((await get('/api/does-not-exist')).status, 404);
 });
 
+test('周 K / 月 K：各市场都可用，日期格式正确', async () => {
+  for (const sym of ['sh600519', 'hk00700', 'usAAPL']) {
+    for (const period of ['week', 'month']) {
+      const r = await get(`/api/kline/${sym}?period=${period}&count=30`);
+      assert.equal(r.status, 200, `${sym} ${period}`);
+      assert.ok(r.body.bars.every((b) => /^\d{4}-\d{2}-\d{2}$/.test(b.time)), `${sym} ${period} 日期应为 YYYY-MM-DD`);
+    }
+  }
+});
+
 test('K 线 / 分时 / 排行 / 搜索', async () => {
   const k = await get('/api/kline/sh600519?period=day&count=50');
   assert.equal(k.status, 200);

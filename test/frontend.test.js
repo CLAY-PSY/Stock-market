@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sma, ema, boll, macd, kdj, rsi } from '../public/js/indicators.js';
 import { fmtBig, fmtPct, fmtVolume, fmtChange, trend, escapeHtml } from '../public/js/format.js';
-import { sessionSlots, slotForTime, chartTime, minuteBucket } from '../public/js/sessions.js';
+import { sessionSlots, slotForTime, chartTime, minuteBucket, isMinutePeriod } from '../public/js/sessions.js';
 import { evaluateAlert, describeAlert, validateAlertInput } from '../public/js/alert-rules.js';
 import { resolveTheme, nextThemeMode, migrateSettings, normalizeThemeMode } from '../public/js/theme.js';
 
@@ -124,4 +124,9 @@ test('价格提醒：缺少价格 / 涨跌幅时不触发', () => {
   assert.equal(evaluateAlert({ active: true, type: 'priceBelow', value: 10 }, { price: null, changePct: 1 }), false);
   assert.equal(evaluateAlert({ active: true, type: 'pctBelow', value: 1 }, { price: 9, changePct: null }), false);
   assert.equal(evaluateAlert({ active: true, type: 'priceBelow', value: 10 }, { price: 9, changePct: null }), true);
+});
+
+test('分钟 K 周期判断：month 不是分钟周期（曾导致月 K 的时间全部变成 NaN）', () => {
+  for (const p of ['m1', 'm5', 'm15', 'm30', 'm60']) assert.equal(isMinutePeriod(p), true, p);
+  for (const p of ['month', 'minute', 'minute5', 'day', 'week', '', undefined, null]) assert.equal(isMinutePeriod(p), false, String(p));
 });
