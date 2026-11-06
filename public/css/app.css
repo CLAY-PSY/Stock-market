@@ -2130,9 +2130,14 @@ select,
     flex-direction: column;
     gap: 2px;
   }
+  /* 手机上只保留「数据来源：腾讯财经」，免责说明不显示 */
+  .footer-source-detail {
+    display: none;
+  }
+  /* 版权靠左，紧接在图表归属的下一行 */
   .footer-copyright {
-    margin-top: 6px;
-    text-align: center;
+    margin-top: 0;
+    text-align: left;
   }
 
   /* 底部导航 */
