@@ -1,5 +1,7 @@
 import { $, icons } from '../dom.js';
 import { store } from '../store.js';
+import { THEME_COLOR, THEME_LABEL, nextThemeMode, normalizeThemeMode, resolveTheme } from '../theme.js';
+import { toast } from './toast.js';
 
 const MARKETS = [
   ['cn', '沪深'],
@@ -65,13 +67,32 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
+const systemLight = window.matchMedia('(prefers-color-scheme: light)');
+const THEME_ICON = { auto: 'contrast', light: 'sun', dark: 'moon' };
+
+/** 应用主题；返回实际主题是否发生了变化（图表需要按新配色重绘） */
 function applyTheme() {
-  const theme = store.settings.theme ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-  document.documentElement.dataset.theme = theme;
-  // 手机浏览器地址栏 / 状态栏颜色
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#11161f' : '#ffffff');
-  $('#btn-theme').innerHTML = theme === 'dark' ? icons.sun : icons.moon;
-  $('#btn-theme').title = theme === 'dark' ? '切换到浅色主题' : '切换到深色主题';
+  const mode = normalizeThemeMode(store.settings.theme);
+  const theme = resolveTheme(mode, systemLight.matches);
+  const root = document.documentElement;
+  const changed = root.dataset.theme !== theme;
+  root.dataset.theme = theme;
+  root.dataset.themeMode = mode;
+
+  // 浏览器地址栏 / 状态栏颜色：跟随系统时两个带 media 的 meta 各管一种系统外观，手动指定时统一成所选主题
+  for (const scheme of ['light', 'dark']) {
+    document
+      .getElementById(`theme-color-${scheme}`)
+      ?.setAttribute('content', THEME_COLOR[mode === 'auto' ? scheme : theme]);
+  }
+
+  const next = nextThemeMode(mode);
+  const btn = $('#btn-theme');
+  btn.innerHTML = icons[THEME_ICON[mode]];
+  const current = mode === 'auto' ? `跟随系统（当前${THEME_LABEL[theme]}）` : THEME_LABEL[mode];
+  btn.title = `主题：${current}，点击切换为「${THEME_LABEL[next]}」`;
+  btn.setAttribute('aria-label', btn.title);
+  return changed;
 }
 
 function applyUpDown() {
@@ -89,20 +110,28 @@ export function initHeader({ onThemeChange }) {
   applyTheme();
   applyUpDown();
 
+  // 主题按钮：跟随系统 → 浅色 → 深色 → 跟随系统
   $('#btn-theme').addEventListener('click', () => {
-    const current = document.documentElement.dataset.theme;
-    store.setSetting('theme', current === 'dark' ? 'light' : 'dark');
-    applyTheme();
-    onThemeChange();
+    const mode = nextThemeMode(store.settings.theme);
+    store.setSetting('theme', mode);
+    if (applyTheme()) onThemeChange();
+    const hint = mode === 'auto' ? `，当前为${THEME_LABEL[document.documentElement.dataset.theme]}` : '';
+    toast(`主题：${THEME_LABEL[mode]}${hint}`, { duration: 1800 });
   });
   $('#btn-updown').addEventListener('click', () => {
     store.setSetting('colorMode', store.settings.colorMode === 'intl' ? 'cn' : 'intl');
     applyUpDown();
     onThemeChange();
   });
-  matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-    if (store.settings.theme) return;
-    applyTheme();
-    onThemeChange();
+  // 系统切换深浅外观时（手动切换、定时自动切换），「跟随系统」模式下立即跟随
+  const onSystemChange = () => {
+    if (normalizeThemeMode(store.settings.theme) !== 'auto') return;
+    if (applyTheme()) onThemeChange();
+  };
+  if (systemLight.addEventListener) systemLight.addEventListener('change', onSystemChange);
+  else systemLight.addListener?.(onSystemChange); // iOS Safari 13 及更早
+  // 从后台切回时再检查一次：部分 App 内浏览器在后台时不派发 change 事件
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) onSystemChange();
   });
 }

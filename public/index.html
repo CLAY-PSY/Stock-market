@@ -4,7 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#11161f" />
+    <!-- 地址栏 / 状态栏颜色：跟随系统时按系统外观二选一，手动指定主题时由 JS 统一改成所选颜色 -->
+    <meta name="theme-color" id="theme-color-light" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" id="theme-color-dark" media="(prefers-color-scheme: dark)" content="#11161f" />
     <!-- 阻止 iOS 把股票代码、价格识别成电话号码 -->
     <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
     <!-- 添加到主屏幕（PWA） -->
@@ -64,7 +66,7 @@
             <span data-icon="bell"></span><span class="badge" id="alerts-badge" hidden></span>
           </button>
           <button class="text-btn" id="btn-updown" type="button" title="切换涨跌颜色"></button>
-          <button class="icon-btn" id="btn-theme" type="button" title="切换深色 / 浅色主题" aria-label="切换主题"></button>
+          <button class="icon-btn" id="btn-theme" type="button" title="主题：跟随系统 / 浅色 / 深色" aria-label="切换主题"></button>
         </div>
       </header>
 
