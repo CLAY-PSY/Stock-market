@@ -5,6 +5,7 @@
 import { migrateSettings, SETTINGS_VERSION } from './theme.js';
 import { createStateSanitizer, MAX_WATCHLIST, MAX_ALERTS } from './data/saved-state.js';
 import { normalizeSymbol } from '../shared/symbols.js';
+import { pickDefaultWatchlist } from './default-watchlist.js';
 
 const { sanitizeSaved } = createStateSanitizer(normalizeSymbol);
 
@@ -23,22 +24,6 @@ export const INDICES = [
   'usDJI',
   'usIXIC',
   'usINX',
-];
-
-const DEFAULT_WATCHLIST = [
-  'sh600519',
-  'sz300750',
-  'sz002594',
-  'sh601318',
-  'sh600036',
-  'sh510300',
-  'hk00700',
-  'hk09988',
-  'hk03690',
-  'usAAPL',
-  'usNVDA',
-  'usTSLA',
-  'usMSFT',
 ];
 
 const DEFAULT_SETTINGS = {
@@ -72,11 +57,19 @@ class Store {
     const savedSettings = saved.settings ? migrateSettings(saved.settings) : {};
     this.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
     if (saved.settings && saved.settings.settingsVersion !== SETTINGS_VERSION) this.persist();
-    this.watchlist = saved.watchlist ?? [...DEFAULT_WATCHLIST];
     this.alerts = saved.alerts;
-    this.selected = saved.selected ?? this.watchlist[0] ?? 'sh600519';
     this.quotes = new Map();
     this.names = new Map(Object.entries(saved.names)); // 代码 → 名称缓存，报价到达前用于展示
+    if (saved.watchlist) {
+      this.watchlist = saved.watchlist;
+    } else {
+      // 没有保存过自选（第一次打开 / 换浏览器 / 清除了数据）：随机挑一组热门股票，并立即保存，之后保持不变
+      const picked = pickDefaultWatchlist();
+      this.watchlist = picked.symbols;
+      for (const [symbol, name] of Object.entries(picked.names)) this.names.set(symbol, name);
+      this.persist();
+    }
+    this.selected = saved.selected ?? this.watchlist[0] ?? 'sh600519';
     this.unknown = new Set();
     this.market = null;
     this.provider = null;
