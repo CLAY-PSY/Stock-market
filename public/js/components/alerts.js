@@ -1,4 +1,5 @@
-import { $, h, icons } from '../dom.js';
+import { $, h, icons, prefersReducedMotion } from '../dom.js';
+import { isMobile } from './mobile-nav.js';
 import { store, MAX_ALERTS } from '../store.js';
 import { fmtPrice, fmtPct, displayCode } from '../format.js';
 import { ALERT_TYPES, describeAlert, evaluateAlert, validateAlertInput } from '../alert-rules.js';
@@ -80,8 +81,23 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
 
   /* ------------------------------------------------------------ drawer */
 
+  let opener = null; // 打开抽屉前的焦点，关闭后还给它
+  let closeTimer = null;
+  const isDrawerOpen = () => !drawer.hidden && !drawer.classList.contains('closing');
+
+  const finishClose = () => {
+    clearTimeout(closeTimer);
+    drawer.hidden = true;
+    scrim.hidden = true;
+    drawer.classList.remove('closing');
+    scrim.classList.remove('closing');
+  };
+
   const openDrawer = () => {
-    if (!drawer.hidden) return;
+    if (isDrawerOpen()) return;
+    if (!drawer.hidden) finishClose(); // 正在播放收起动画时又被打开
+    const active = document.activeElement;
+    opener = active && active !== document.body && !drawer.contains(active) ? active : null;
     drawer.hidden = false;
     scrim.hidden = false;
     document.documentElement.classList.add('sheet-open');
@@ -90,10 +106,19 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
     onDrawerChange(true);
   };
   const closeDrawer = () => {
-    if (drawer.hidden) return;
-    drawer.hidden = true;
-    scrim.hidden = true;
+    if (!isDrawerOpen()) return;
+    const focusWasInside = drawer.contains(document.activeElement) || document.activeElement === document.body;
     document.documentElement.classList.remove('sheet-open');
+    // 桌面：滑出后再隐藏；手机上它是一个「标签页」，直接切换；系统要求减少动态效果时也不播放
+    if (!isMobile() && !prefersReducedMotion()) {
+      drawer.classList.add('closing');
+      scrim.classList.add('closing');
+      closeTimer = setTimeout(finishClose, 170);
+    } else {
+      finishClose();
+    }
+    if (focusWasInside && opener?.isConnected) opener.focus({ preventScroll: true });
+    opener = null;
     onDrawerChange(false);
   };
 
@@ -104,7 +129,7 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
     if (e.key !== 'Escape') return;
     if (isDialogOpen()) {
       if (!nativeDialog) hideDialog(); // 原生 dialog 自己处理 Esc
-    } else if (!drawer.hidden) closeDrawer();
+    } else if (isDrawerOpen()) closeDrawer();
   });
   $('#btn-new-alert').addEventListener('click', () => openDialog(store.selected));
   soundEl.checked = store.settings.sound;
@@ -130,7 +155,12 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
       ...store.alerts.map((a) => {
         const q = store.quotes.get(a.symbol);
         const decimals = q?.decimals ?? 2;
-        const title = h('div', { class: 'alert-title' }, store.nameOf(a.symbol), h('span', {}, displayCode(a.symbol)));
+        const title = h(
+          'button',
+          { class: 'alert-title', type: 'button', title: '打开该股票' },
+          store.nameOf(a.symbol),
+          h('span', {}, displayCode(a.symbol)),
+        );
         title.addEventListener('click', () => {
           onPick(a.symbol);
           closeDrawer();
@@ -251,10 +281,10 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
 
   store.on('quotes', (changes) => {
     check(changes);
-    if (!drawer.hidden) renderList();
+    if (isDrawerOpen()) renderList();
   });
   store.on('alerts', renderList);
   renderBadge();
 
-  return { openDialog, openDrawer, closeDrawer, isDrawerOpen: () => !drawer.hidden };
+  return { openDialog, openDrawer, closeDrawer, isDrawerOpen };
 }

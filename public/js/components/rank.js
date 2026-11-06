@@ -1,4 +1,4 @@
-import { $, $$, h } from '../dom.js';
+import { $, $$, h, activatable } from '../dom.js';
 import { api, capabilities } from '../api.js';
 import { store } from '../store.js';
 import { fmtPrice, fmtPct, fmtBig, fmtNum, trend, displayCode } from '../format.js';
@@ -58,10 +58,12 @@ export function initRank({ onPick }) {
             h('span', { class: `rank-price ${trend(r.changePct)}` }, fmtPrice(r.price, 2)),
             h('span', { class: `rank-metric ${m.dir}` }, m.text),
           );
-          li.addEventListener('click', () => {
+          const open = () => {
             store.names.set(r.symbol, r.name);
             onPick(r.symbol);
-          });
+          };
+          li.addEventListener('click', open);
+          activatable(li, open);
           return li;
         }),
       );

@@ -19,6 +19,23 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+/**
+ * 让非按钮元素（列表行等）可以用键盘操作：Tab 聚焦，Enter / 空格触发。
+ * 只响应元素自身上的按键，内部按钮（例如「移出自选」）的按键不受影响。
+ */
+export function activatable(el, onActivate) {
+  el.tabIndex = 0;
+  el.addEventListener('keydown', (e) => {
+    if (e.target !== el || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    onActivate(e);
+  });
+  return el;
+}
+
+/** 当前是否应减少动画（系统设置了「减少动态效果」） */
+export const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
 /** 文本变化时短暂闪烁背景，提示价格跳动 */
 export function flash(el, direction) {
   if (!el || direction === 'flat') return;

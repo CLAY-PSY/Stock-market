@@ -80,8 +80,12 @@ export class StockChart {
     this.data = null;
     this.opts = {};
     this.legends = [];
-    this.resizeObserver = new ResizeObserver(() => this.layoutLegends());
+    // 图表自己也用 ResizeObserver 调整面板高度，而且排在这个回调之后：下一帧再按新的面板高度摆放图例，
+    // 否则图例会停在上一次的位置（窗口缩放、手机旋转屏幕后错位到别的面板上）
+    this.resizeObserver = new ResizeObserver(() => this.scheduleLayout());
     this.resizeObserver.observe(container);
+    // 拖动面板之间的分隔条也会改变面板高度
+    container.addEventListener('pointerup', () => this.scheduleLayout());
   }
 
   destroy() {
@@ -174,6 +178,11 @@ export class StockChart {
     this.container.append(el);
     this.legends[paneIndex] = el;
     return el;
+  }
+
+  scheduleLayout() {
+    cancelAnimationFrame(this.layoutFrame);
+    this.layoutFrame = requestAnimationFrame(() => this.layoutLegends());
   }
 
   layoutLegends() {
