@@ -1278,24 +1278,36 @@ svg {
 
 /* -------------------------------------------------------------- footer */
 
+/* 桌面：左侧数据来源；右侧图表归属、快捷键与版权挨在一起，靠右对齐 */
 .footer {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  gap: 2px 24px;
   padding: 6px 16px;
   font-size: 11px;
+  line-height: 18px;
   color: var(--text-3);
   border-top: 1px solid var(--border);
   background: var(--panel);
+}
+/* 窗口较窄换行时，右侧这一组整体换到下一行，仍然靠右 */
+.footer-meta {
+  margin-left: auto;
+  text-align: right;
 }
 .footer kbd {
   font-size: 10px;
   line-height: 14px;
   min-width: 16px;
 }
-.footer {
-  flex-wrap: wrap;
+/* 图表归属与版权之间的分隔符 */
+.footer-right::after {
+  content: '·';
+  margin: 0 8px;
+  color: var(--text-3);
 }
 .footer-copyright {
   white-space: nowrap;
@@ -2099,11 +2111,24 @@ select,
 
   /* 页脚：保留数据来源与图表库归属声明 */
   .footer {
+    display: flex;
     flex-direction: column;
+    align-items: stretch; /* 覆盖桌面的居中，否则纵向排列时各行会水平居中 */
     gap: 2px;
     padding: 10px max(12px, var(--safe-right)) 12px max(12px, var(--safe-left));
     border-top: 0;
     background: transparent;
+  }
+  /* 手机上各占一行，不需要分隔符 */
+  .footer-right::after {
+    content: none;
+  }
+  .footer-meta {
+    margin-left: 0;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .footer-copyright {
     margin-top: 6px;
