@@ -9,7 +9,10 @@ import {
   parseKlineRows,
   parseTickRows,
   parseSearchResponse,
-} from '../server/providers/tencent.js';
+  parseMobileRankItems,
+  extractJsVar,
+  createTencentProvider,
+} from '../shared/tencent.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 
@@ -126,6 +129,64 @@ test('逐笔成交解析', () => {
   assert.equal(ticks.length, 3);
   assert.deepEqual(ticks[0], { id: 840, time: '10:13:21', price: 1440.54, change: -0.01, volume: 400, amount: 576198, side: 'B' });
   assert.equal(ticks[2].side, 'M');
+});
+
+test('extractJsVar 按变量名取值', () => {
+  assert.deepEqual(extractJsVar('v_detail_time_sh600519=[20261106,"09:25:01~09:33:24"];', 'v_detail_time_sh600519'), [
+    20261106,
+    '09:25:01~09:33:24',
+  ]);
+  assert.equal(extractJsVar('v_hint="sh~600519~\\u8d35\\u5dde~gzmt~GP-A";', 'v_hint'), 'sh~600519~贵州~gzmt~GP-A');
+  assert.equal(extractJsVar('v_other="x";', 'v_hint'), null);
+  assert.equal(extractJsVar('v_hint=not json', 'v_hint'), null);
+});
+
+test('浏览器直连模式的排行解析（手机版接口）', () => {
+  const items = parseMobileRankItems([
+    { name: '贝特利', code: 'sz301697', zxj: '36.60', zd: '6.10', zdf: '20.00', hsl: '39.18', zf: '11.80', cjl: '172356.00', lb: '5.35', zs: '0.10' },
+    { name: '坏数据', code: '' },
+  ]);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].symbol, 'sz301697');
+  assert.equal(items[0].changePct, 20);
+  assert.equal(items[0].volume, 17235600);
+  assert.deepEqual(parseMobileRankItems(null), []);
+});
+
+test('createTencentProvider 通过注入的 io 访问网络（浏览器 / 服务端共用逻辑）', async () => {
+  const calls = [];
+  const sample = fixture('qt-sample.txt');
+  const provider = createTencentProvider(
+    {
+      text: async (url, encoding) => {
+        calls.push(['text', url, encoding]);
+        return sample;
+      },
+      json: async (url) => {
+        calls.push(['json', url]);
+        return { code: 0, data: [{ name: '贝特利', code: 'sz301697', zxj: '36.6', zdf: '20' }] };
+      },
+      script: async (url, name) => {
+        calls.push(['script', url, name]);
+        return name === 'v_hint' ? 'sh~600519~贵州茅台~gzmt~GP-A' : null;
+      },
+    },
+    { rankSource: 'mobile' },
+  );
+  const quotes = await provider.getQuotes(['sh600519', 'hk00700']);
+  assert.equal(quotes.get('sh600519').price, 1443.89);
+  assert.ok(calls[0][1].includes('r_hk00700'), '港股使用实时行情前缀');
+  assert.equal(calls[0][2], 'gbk');
+
+  const found = await provider.search('茅台');
+  assert.equal(found[0].symbol, 'sh600519');
+  assert.equal(calls.at(-1)[2], 'v_hint');
+
+  const rank = await provider.getRank({ sort: 'changePct', order: 'asc', count: 5 });
+  assert.equal(rank.items[0].symbol, 'sz301697');
+  assert.match(calls.at(-1)[1], /mktHs\/rank\?l=5&p=1&t=ranka\/chr&ordertype=&o=1$/);
+  await assert.rejects(() => provider.getRank({ sort: 'amount' }), { name: 'NotSupportedError' });
+  assert.deepEqual(provider.capabilities.rank, { sorts: ['changePct'], boards: ['all'] });
 });
 
 test('搜索结果解析：解码 \\u 转义、过滤涡轮、规范化代码', () => {

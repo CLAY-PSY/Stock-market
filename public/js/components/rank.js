@@ -1,5 +1,5 @@
 import { $, $$, h } from '../dom.js';
-import { api } from '../api.js';
+import { api, capabilities } from '../api.js';
 import { store } from '../store.js';
 import { fmtPrice, fmtPct, fmtBig, fmtNum, trend, displayCode } from '../format.js';
 
@@ -18,6 +18,21 @@ export function initRank({ onPick }) {
   const board = $('#rank-board');
   let timer = null;
   let ctrl = null;
+
+  // 静态部署（浏览器直连）时数据源只支持部分排行，其余选项置灰
+  const caps = capabilities().rank;
+  if (caps) {
+    $$('button', tabs).forEach((b) => {
+      const ok = caps.sorts.includes(b.dataset.v.split(':')[0]);
+      b.disabled = !ok;
+      if (!ok) b.title = 'GitHub Pages 静态部署下仅支持涨幅 / 跌幅榜';
+    });
+    [...board.options].forEach((o) => {
+      o.disabled = !caps.boards.includes(o.value);
+    });
+    if (!caps.sorts.includes(store.settings.rankSort.split(':')[0])) store.setSetting('rankSort', 'changePct:desc');
+    if (!caps.boards.includes(store.settings.rankBoard)) store.setSetting('rankBoard', 'all');
+  }
 
   const syncTabs = () => $$('button', tabs).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === store.settings.rankSort)));
 
@@ -69,8 +84,9 @@ export function initRank({ onPick }) {
   };
 
   tabs.addEventListener('click', (e) => {
-    const v = e.target.closest('button')?.dataset.v;
-    if (!v) return;
+    const btn = e.target.closest('button');
+    const v = btn?.dataset.v;
+    if (!v || btn.disabled) return;
     store.setSetting('rankSort', v);
     syncTabs();
     load();

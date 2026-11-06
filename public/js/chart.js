@@ -14,7 +14,7 @@ import {
   LineSeries,
   LineStyle,
   CrosshairMode,
-} from '/vendor/lightweight-charts.mjs';
+} from '../vendor/lightweight-charts.mjs';
 import { sma, boll, macd, kdj, rsi } from './indicators.js';
 import { sessionSlots, slotForTime, chartTime, minuteBucket } from './sessions.js';
 import { fmtBig, fmtPct, fmtPrice, escapeHtml } from './format.js';

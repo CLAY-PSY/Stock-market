@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSymbol, marketOf, parseSymbolList, inferCnExchange } from '../server/lib/symbols.js';
+import { normalizeSymbol, marketOf, parseSymbolList, inferCnExchange } from '../shared/symbols.js';
 
 test('A 股代码自动识别交易所', () => {
   assert.equal(normalizeSymbol('600519'), 'sh600519');

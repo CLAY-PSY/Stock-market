@@ -45,7 +45,8 @@ npm start
 ```bash
 npm run dev     # 修改服务端代码后自动重启
 npm run demo    # 离线演示模式（模拟数据，无需外网）
-npm test        # 运行测试（解析器、指标、REST 与 WebSocket 集成测试）
+npm test        # 运行测试（解析器、指标、REST 与 WebSocket 集成测试、静态构建检查）
+npm run build:static  # 生成 GitHub Pages 静态站点到 dist/
 ```
 
 使用 Docker：
@@ -54,6 +55,33 @@ npm test        # 运行测试（解析器、指标、REST 与 WebSocket 集成�
 docker build -t stockpulse .
 docker run -p 3000:3000 stockpulse
 ```
+
+## 部署到 GitHub Pages
+
+仓库自带 GitHub Actions 工作流（`.github/workflows/pages.yml`），推送到 `main` 后会自动运行测试、构建静态站点并发布到 GitHub Pages。
+
+首次使用需要在仓库里开启一次：
+
+1. 打开仓库 **Settings → Pages**，在 **Build and deployment → Source** 中选择 **GitHub Actions**。
+2. 合并到 `main`（或在 **Actions → Deploy to GitHub Pages → Run workflow** 手动运行）。
+3. 部署完成后访问 `https://<用户名>.github.io/<仓库名>/`，例如 <https://clay-psy.github.io/Stock-market/>。
+
+GitHub Pages 只能托管静态文件，无法运行 Node.js 服务，所以静态版本会自动切换为「浏览器直连」模式：
+
+| | Node.js 服务端版 | GitHub Pages 静态版 |
+| --- | --- | --- |
+| 行情获取 | 服务端统一轮询，WebSocket 推送（约 2 秒） | 每个访问者的浏览器直接轮询腾讯接口（约 3 秒） |
+| 排行榜 | 涨幅、跌幅、成交额、涨速、量比、振幅；全部 A 股 / 创业板 / 科创板 | 仅全部 A 股的涨幅、跌幅榜 |
+| 其余功能 | 完整 | 与服务端版相同 |
+
+搜索与逐笔成交接口不支持跨域请求，静态版通过 `<script>` 标签从 `smartbox.gtimg.cn`、`stock.gtimg.cn` 加载数据。本地预览静态产物：
+
+```bash
+npm run build:static         # 生成 dist/
+npx serve dist               # 或任意静态文件服务器
+```
+
+页面根据 `<meta name="stockpulse-mode">` 选择模式：Node.js 服务返回页面时写为 `server`，静态构建写为 `static`；为 `auto`（例如用其它静态服务器直接打开 `public/`）时自动探测，也可以用 `?mode=static` 指定。
 
 ## 配置
 
@@ -86,9 +114,10 @@ docker run -p 3000:3000 stockpulse
                                        └─────────────────────────┘
 ```
 
-- **服务端**（`server/`）：Express 5 + `ws`。`providers/tencent.js` 负责把腾讯接口的原始字段（GBK 编码、`~` 分隔）转换为统一的数据结构；`realtime.js` 是推送中心；`lib/cache.js` 提供 TTL 缓存与并发请求合并，多个用户同时查看同一只股票只会请求一次上游。
-- **前端**（`public/`）：原生 ES Modules，无需构建。图表使用 [TradingView Lightweight Charts](https://www.tradingview.com/lightweight-charts/) v5，由服务端从 `node_modules` 直接提供，不依赖外部 CDN。
-- **扩展数据源**：实现与 `server/providers/tencent.js` 相同的接口（`getQuotes`、`getMinute`、`getKline`、`getTicks`、`getRank`、`search`、`getMarketStatus`）并在 `providers/index.js` 注册即可。
+- **共用模块**（`shared/`）：服务端与浏览器都会加载。`tencent.js` 负责把腾讯接口的原始字段（GBK 编码、`~` 分隔）转换为统一的数据结构，网络访问通过注入的 `io` 完成；`symbols.js` 规范化代码；`cache.js` 提供 TTL 缓存与并发请求合并，多个用户同时查看同一只股票只会请求一次上游。
+- **服务端**（`server/`）：Express 5 + `ws`。`providers/tencent.js` 用 Node.js 的 fetch 实现 `io`；`realtime.js` 是推送中心。
+- **前端**（`public/`）：原生 ES Modules，无需构建。图表使用 [TradingView Lightweight Charts](https://www.tradingview.com/lightweight-charts/) v5，由服务端（或静态构建）从 `node_modules` 提供，不依赖外部 CDN。静态模式下 `js/data/direct-provider.js` 在浏览器里实现 `io`，`js/data/local-hub.js` 代替 WebSocket 在本地轮询。
+- **扩展数据源**：实现与 `createTencentProvider` 返回值相同的接口（`getQuotes`、`getMinute`、`getKline`、`getTicks`、`getRank`、`search`、`getMarketStatus`）并在 `server/providers/index.js` 注册即可。
 
 ## 接口
 

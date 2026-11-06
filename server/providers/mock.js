@@ -4,8 +4,8 @@
  * 用于无网络环境下的开发、演示和自动化测试。价格按几何布朗运动随机游走，
  * 接口返回结构与真实数据源完全一致，前端会显示「模拟数据」标记。
  */
-import { marketOf } from '../lib/symbols.js';
-import { NotFoundError, NotSupportedError } from './errors.js';
+import { marketOf } from '../../shared/symbols.js';
+import { NotFoundError, NotSupportedError } from '../../shared/errors.js';
 
 const UNIVERSE = [
   ['sh000001', '上证指数', 3640, 'index'],

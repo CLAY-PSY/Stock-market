@@ -1,13 +1,7 @@
 import { config } from '../config.js';
+import { UpstreamError } from '../../shared/errors.js';
 
-export class UpstreamError extends Error {
-  constructor(message, { status, url, cause } = {}) {
-    super(message, { cause });
-    this.name = 'UpstreamError';
-    this.status = status;
-    this.url = url;
-  }
-}
+export { UpstreamError };
 
 const DEFAULT_HEADERS = {
   'User-Agent':

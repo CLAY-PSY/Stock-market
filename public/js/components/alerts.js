@@ -28,7 +28,7 @@ function beep() {
 function notify(title, body, tag) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(title, { body, tag, icon: '/favicon.svg' });
+    const n = new Notification(title, { body, tag, icon: 'favicon.svg' });
     n.onclick = () => {
       window.focus();
       n.close();
