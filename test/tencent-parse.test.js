@@ -13,6 +13,9 @@ import {
   extractJsVar,
   createTencentProvider,
   sanitizeSearchQuery,
+  parseActiveCn,
+  parseActiveHk,
+  parseActiveUs,
 } from '../shared/tencent.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -230,4 +233,61 @@ test('搜索关键字净化：去掉会被上游拒绝的符号，保留代码�
   assert.equal(sanitizeSearchQuery('"\'<>'), '');
   assert.equal(sanitizeSearchQuery('a'.repeat(100)).length, 32);
   assert.equal(sanitizeSearchQuery(null), '');
+});
+
+test('活跃股：A 股按 现价 × 成交量 取成交额靠前的，排除 ST / 退市 / 无成交', () => {
+  const list = [
+    { code: 'sz000001', name: '平安银行', zxj: '10', cjl: '1000' }, // 成交额 100 万
+    { code: 'sh600519', name: '贵州茅台', zxj: '1500', cjl: '100' }, // 1500 万
+    { code: 'sh600000', name: '*ST某某', zxj: '2', cjl: '900000' },
+    { code: 'sz000002', name: '某某退', zxj: '1', cjl: '900000' },
+    { code: 'sz000003', name: '停牌股', zxj: '0', cjl: '0' },
+    { code: 'bad', name: '坏数据', zxj: '1', cjl: '1' },
+    { code: 'sh600519', name: '贵州茅台', zxj: '1500', cjl: '100' }, // 重复
+  ];
+  assert.deepEqual(parseActiveCn(list), [
+    { symbol: 'sh600519', name: '贵州茅台' },
+    { symbol: 'sz000001', name: '平安银行' },
+  ]);
+  assert.equal(parseActiveCn(list, 1).length, 1);
+  assert.deepEqual(parseActiveCn(null), []);
+});
+
+test('活跃股：港股 hk_rank 与美股列表', () => {
+  const hk = {
+    code: 0,
+    data: {
+      page_data: [
+        '00700~腾讯控股~424.20~-1.91~-8.20~424.20~424.20~29000000~12502715538.83~1~1~1~1~1',
+        '09988~阿里巴巴-W~105.80~-3.02~-3.30~105.80~105.80~95000000~10063671644.94~1~1~1~1~1',
+        '00001~停牌~0~0~0~0~0~0~0~0~0~0~0~0',
+      ],
+    },
+  };
+  assert.deepEqual(parseActiveHk(hk), [
+    { symbol: 'hk00700', name: '腾讯控股' },
+    { symbol: 'hk09988', name: '阿里巴巴-W' },
+  ]);
+  assert.deepEqual(parseActiveHk({ code: 2003, data: '' }), []);
+  const us = parseActiveUs([
+    [{ code: 'usNVDA.OQ', name: '英伟达', zxj: '181.60', turnover: '56686773567.00' }],
+    [
+      { code: 'usTSM.N', name: '台积电', zxj: '353.10', turnover: '15567579262.00' },
+      { code: 'usNVDA.OQ', name: '英伟达', zxj: '181.60', turnover: '56686773567.00' },
+    ],
+  ]);
+  assert.deepEqual(us, [
+    { symbol: 'usNVDA', name: '英伟达' },
+    { symbol: 'usTSM', name: '台积电' },
+  ]);
+});
+
+test('活跃股：静态模式不支持美股列表，服务端模式支持', async () => {
+  const noop = { text: async () => '', json: async () => ({}), script: async () => null };
+  const direct = createTencentProvider(noop, { rankSource: 'mobile' });
+  assert.deepEqual(direct.capabilities.activeMarkets, ['cn', 'hk']);
+  await assert.rejects(direct.getActiveStocks('us'), /美股/);
+  await assert.rejects(direct.getActiveStocks('jp'), /不支持/);
+  const server = createTencentProvider(noop, { usList: true });
+  assert.deepEqual(server.capabilities.activeMarkets, ['cn', 'hk', 'us']);
 });

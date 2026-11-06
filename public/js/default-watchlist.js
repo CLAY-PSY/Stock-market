@@ -1,10 +1,12 @@
 /**
  * 默认自选：没有保存过自选的访问者（第一次打开、换了浏览器、清除了网站数据）
- * 从热门股票池中随机挑选一组，挑好后立即保存，之后每次打开都保持这组（见 store.js）。
- * 纯函数，不访问 DOM，便于测试。
+ * 从各市场当前的活跃股（按成交额，实时从行情接口获取）中随机挑选一组，挑好后立即保存，
+ * 之后每次打开都保持这组（见 store.js）。
+ * 某个市场的实时列表取不到时（接口失败，或静态部署下美股列表不可用），退回下面的备用股票池。
+ * 纯函数，不访问 DOM / 网络，便于测试。
  */
 
-/** 股票池：[代码, 名称]。名称只在第一笔行情到达前显示，之后以行情接口返回的名称为准 */
+/** 备用股票池：[代码, 名称]。名称只在第一笔行情到达前显示，之后以行情接口返回的名称为准 */
 export const WATCHLIST_POOL = {
   cn: [
     ['sh600519', '贵州茅台'],
@@ -31,13 +33,6 @@ export const WATCHLIST_POOL = {
     ['sz002475', '立讯精密'],
     ['sh601012', '隆基绿能'],
     ['sh600050', '中国联通'],
-  ],
-  fund: [
-    ['sh510300', '沪深300ETF华泰柏瑞'],
-    ['sh510500', '中证500ETF南方'],
-    ['sz159915', '创业板ETF易方达'],
-    ['sh588000', '科创50ETF华夏'],
-    ['sh510050', '上证50ETF华夏'],
   ],
   hk: [
     ['hk00700', '腾讯控股'],
@@ -72,8 +67,8 @@ export const WATCHLIST_POOL = {
   ],
 };
 
-/** 每个分组挑选的数量（合计 13 只，与原先的默认自选数量一致），按 A 股 → ETF → 港股 → 美股排列 */
-export const PICK_COUNT = { cn: 5, fund: 1, hk: 3, us: 4 };
+/** 每个市场挑选的数量（合计 13 只），按 A 股 → 港股 → 美股排列 */
+export const PICK_COUNT = { cn: 6, hk: 3, us: 4 };
 
 /** 从数组中不重复地随机取 n 个（Fisher–Yates 洗牌的前 n 步） */
 function sample(list, n, rand) {
@@ -86,15 +81,28 @@ function sample(list, n, rand) {
   return copy.slice(0, count);
 }
 
+const isCandidate = (c) => c && typeof c.symbol === 'string' && typeof c.name === 'string';
+
 /**
  * 随机挑选一组默认自选。
- * @param rand 返回 [0, 1) 的随机数函数，测试时可传入固定序列
- * @returns {{ symbols: string[], names: Record<string, string> }}
+ * @param candidates 各市场的实时活跃股 { cn?: [{symbol, name}], hk?: [...], us?: [...] }；缺失或数量不足的市场使用备用股票池
+ * @param rand       返回 [0, 1) 的随机数函数，测试时可传入固定序列
+ * @returns {{ symbols: string[], names: Record<string, string>, sources: Record<string, 'live' | 'pool'> }}
  */
-export function pickDefaultWatchlist(rand = Math.random) {
-  const picked = Object.entries(PICK_COUNT).flatMap(([group, n]) => sample(WATCHLIST_POOL[group], n, rand));
-  return {
-    symbols: picked.map(([symbol]) => symbol),
-    names: Object.fromEntries(picked),
-  };
+export function pickDefaultWatchlist(candidates = {}, rand = Math.random) {
+  const symbols = [];
+  const names = {};
+  const sources = {};
+  for (const [market, n] of Object.entries(PICK_COUNT)) {
+    const live = Array.isArray(candidates[market]) ? candidates[market].filter(isCandidate) : [];
+    const useLive = live.length >= n * 3; // 候选太少就谈不上随机，改用备用池
+    sources[market] = useLive ? 'live' : 'pool';
+    const list = useLive ? live : WATCHLIST_POOL[market].map(([symbol, name]) => ({ symbol, name }));
+    for (const { symbol, name } of sample(list, n, rand)) {
+      if (names[symbol]) continue;
+      symbols.push(symbol);
+      names[symbol] = name;
+    }
+  }
+  return { symbols, names, sources };
 }

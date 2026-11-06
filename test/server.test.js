@@ -82,6 +82,15 @@ test('K 线 / 分时 / 排行 / 搜索', async () => {
   assert.equal(s.body.data[0].symbol, 'sh600519');
 });
 
+test('GET /api/active-stocks', async () => {
+  const cn = await get('/api/active-stocks?market=cn');
+  assert.equal(cn.status, 200);
+  assert.ok(cn.body.items.length > 0);
+  assert.ok(cn.body.items.every((i) => /^(sh|sz|bj)\d{6}$/.test(i.symbol) && i.name));
+  assert.equal((await get('/api/active-stocks?market=jp')).status, 400);
+  assert.equal((await get('/api/active-stocks')).status, 400);
+});
+
 test('页面与图表库静态资源', async () => {
   const page = await fetch(`http://${base}/`);
   assert.equal(page.status, 200);

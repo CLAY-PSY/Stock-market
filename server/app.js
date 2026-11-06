@@ -144,6 +144,13 @@ export function createApp({ provider, hub }) {
     res.json(await provider.getTicks(symbol, { limit: intParam(req.query.limit, 60) }));
   });
 
+  // 某个市场当前的活跃股（按成交额），前端据此给新访客随机挑选默认自选
+  api.get('/active-stocks', async (req, res) => {
+    const market = String(req.query.market ?? '');
+    if (!['cn', 'hk', 'us'].includes(market)) throw new HttpError(400, 'market 只能是 cn / hk / us');
+    res.json({ market, items: await provider.getActiveStocks(market) });
+  });
+
   api.get('/rank', async (req, res) => {
     const { board = 'all', sort = 'changePct', order = 'desc' } = req.query;
     res.json(

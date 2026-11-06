@@ -60,16 +60,11 @@ class Store {
     this.alerts = saved.alerts;
     this.quotes = new Map();
     this.names = new Map(Object.entries(saved.names)); // 代码 → 名称缓存，报价到达前用于展示
-    if (saved.watchlist) {
-      this.watchlist = saved.watchlist;
-    } else {
-      // 没有保存过自选（第一次打开 / 换浏览器 / 清除了数据）：随机挑一组热门股票，并立即保存，之后保持不变
-      const picked = pickDefaultWatchlist();
-      this.watchlist = picked.symbols;
-      for (const [symbol, name] of Object.entries(picked.names)) this.names.set(symbol, name);
-      this.persist();
-    }
-    this.selected = saved.selected ?? this.watchlist[0] ?? 'sh600519';
+    // 没有保存过自选（第一次打开 / 换浏览器 / 清除了数据）：先留空，由 initDefaultWatchlist() 从实时活跃股中随机挑选
+    this.watchlist = saved.watchlist ?? [];
+    this.pickingDefault = !saved.watchlist;
+    // 新访客默认打开上证指数，挑好自选后不会再跳到别的股票
+    this.selected = saved.selected ?? this.watchlist[0] ?? 'sh000001';
     this.unknown = new Set();
     this.market = null;
     this.provider = null;
@@ -113,6 +108,32 @@ class Store {
     } catch {
       /* 隐私模式或存储已满时忽略 */
     }
+  }
+
+  /**
+   * 新访客的默认自选：从各市场实时活跃股中随机挑选，挑好后立即保存，之后每次打开保持不变。
+   * @param load 返回各市场候选 { cn?: [{symbol, name}], ... }；取不到的市场使用备用股票池
+   */
+  async initDefaultWatchlist(load) {
+    if (!this.pickingDefault) return null;
+    let candidates = {};
+    try {
+      candidates = (await load()) ?? {};
+    } catch {
+      /* 全部失败：使用备用股票池 */
+    }
+    this.pickingDefault = false;
+    let picked = null;
+    // 挑选期间用户已经自己加了自选的，以用户的为准
+    if (!this.watchlist.length) {
+      picked = pickDefaultWatchlist(candidates);
+      for (const [symbol, name] of Object.entries(picked.names)) if (!this.names.has(symbol)) this.names.set(symbol, name);
+      this.watchlist = picked.symbols;
+    }
+    this.persist();
+    this.emit('watchlist', this.watchlist);
+    this.emit('subscriptions');
+    return picked;
   }
 
   /* ---------------------------------------------------------------- quotes */

@@ -1,5 +1,5 @@
 import { $ } from './dom.js';
-import { api, useDirectProvider } from './api.js';
+import { api, capabilities, useDirectProvider } from './api.js';
 import { store } from './store.js';
 import { RealtimeClient } from './realtime.js';
 import { fmtPrice, fmtPct } from './format.js';
@@ -107,6 +107,22 @@ nav.onChange((view) => {
   if (view === 'alerts') alerts.openDrawer();
 });
 initQuotePanel({ onAlert: (symbol) => alerts.openDialog(symbol) });
+
+// 新访客：从各市场当前的活跃股（按成交额）中随机挑选默认自选；单个市场取不到时由 store 改用备用股票池
+const withTimeout = (promise, ms) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+store.initDefaultWatchlist(async () => {
+  const markets = capabilities().activeMarkets ?? ['cn', 'hk', 'us'];
+  const results = await Promise.all(
+    markets.map((m) =>
+      withTimeout(api.activeStocks(m), 8000).then(
+        (res) => [m, res.items],
+        () => [m, null],
+      ),
+    ),
+  );
+  return Object.fromEntries(results);
+});
 initOrderbook();
 initTicks();
 initRank({ onPick: pick });

@@ -8,5 +8,5 @@ export const tencentProvider = createTencentProvider(
     json: (url) => fetchJson(url),
     script: async (url, name) => extractJsVar(await fetchText(url, { encoding: 'gbk' }), name),
   },
-  { name: 'tencent', label: '腾讯财经', rankSource: 'board' },
+  { name: 'tencent', label: '腾讯财经', rankSource: 'board', usList: true },
 );
