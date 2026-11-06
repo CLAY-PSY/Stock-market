@@ -146,8 +146,13 @@ test('WebSocket：hello → 订阅快照 → 持续推送 → 心跳', async () 
   assert.equal(hello.provider, 'mock');
 
   c.ws.send(JSON.stringify({ type: 'set', symbols: ['600519', 'usAAPL', 'not a symbol'] }));
-  const snap = await c.next((m) => m.type === 'quotes' && m.snapshot);
-  assert.deepEqual(new Set(snap.data.map((q) => q.symbol)), new Set(['sh600519', 'usAAPL']));
+  // 新订阅的报价可能来自合并后的即时拉取（snapshot），也可能被常规轮询抢先送达，两者都算收到
+  const received = new Set();
+  while (received.size < 2) {
+    const msg = await c.next((m) => m.type === 'quotes');
+    msg.data.forEach((q) => received.add(q.symbol));
+  }
+  assert.deepEqual(received, new Set(['sh600519', 'usAAPL']), '只收到订阅了的合法代码');
 
   const update = await c.next((m) => m.type === 'quotes' && !m.snapshot);
   assert.ok(update.data.every((q) => ['sh600519', 'usAAPL'].includes(q.symbol)), '只推送已订阅的代码');
