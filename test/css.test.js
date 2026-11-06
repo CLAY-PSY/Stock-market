@@ -62,3 +62,9 @@ test('依赖 color-mix() 的声明都有旧浏览器兜底', () => {
   assert.ok(fallback, '缺少不支持 color-mix 时的兜底');
   for (const sel of ['--up-soft', '.chart-overlay', '.btn-primary:hover']) assert.ok(fallback.body.includes(sel), sel);
 });
+
+test('图表区域隔离层叠上下文（图表库内部的 z-index 不能盖住顶栏和底部导航）', () => {
+  const rule = topLevelRules(css).find((r) => r.prelude === '.chart-wrap');
+  assert.ok(rule, '缺少 .chart-wrap 规则');
+  assert.match(rule.body, /isolation:\s*isolate/);
+});
