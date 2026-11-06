@@ -1123,6 +1123,9 @@ input[type='checkbox'] {
   position: relative;
   flex: 1;
   min-height: 0;
+  /* 图表库内部元素自带 z-index（面板分隔条为 50），不隔离会盖住手机的顶栏（40）和底部导航（45），
+     滚到那里时点不动导航，甚至误拖动面板高度 */
+  isolation: isolate;
 }
 .chart {
   position: absolute;
