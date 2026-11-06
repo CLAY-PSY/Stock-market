@@ -339,5 +339,9 @@ export const mockProvider = {
   getKline,
   getTicks,
   getRank,
+  async getActiveStocks(market) {
+    if (!['cn', 'hk', 'us'].includes(market)) throw new NotSupportedError(`不支持的市场 ${market}`);
+    return UNIVERSE.filter((u) => marketOf(u.symbol) === market && u.type !== 'index').map(({ symbol, name }) => ({ symbol, name }));
+  },
   search,
 };

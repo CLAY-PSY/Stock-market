@@ -106,6 +106,10 @@ export function initWatchlist({ onPick }) {
     rows.clear();
     $('#wl-count').textContent = store.watchlist.length ? `(${store.watchlist.length})` : '';
     if (!syms.length) {
+      if (store.pickingDefault) {
+        list.append(h('li', { class: 'empty' }, h('div', { class: 'spinner' }), '正在从实时行情中为你挑选自选股…'));
+        return;
+      }
       list.append(
         h(
           'li',

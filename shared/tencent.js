@@ -21,6 +21,8 @@ const DETAIL = 'https://stock.gtimg.cn/data/index.php';
 const RANK = 'https://proxy.finance.qq.com/cgi/cgi-bin/rank/hs/getBoardRankList';
 const RANK_MOBILE = 'https://proxy.finance.qq.com/ifzqgtimg/appstock/app/mktHs/rank';
 const SMARTBOX = 'https://smartbox.gtimg.cn/s3/';
+const HK_RANK = 'https://stock.gtimg.cn/data/hk_rank.php';
+const US_LIST = 'https://proxy.finance.qq.com/cgi/cgi-bin/rank/us/getList';
 
 const TZ = { cn: 'Asia/Shanghai', hk: 'Asia/Hong_Kong', us: 'America/New_York' };
 const CURRENCY = { cn: 'CNY', hk: 'HKD', us: 'USD' };
@@ -396,6 +398,57 @@ export function parseMobileRankItems(list) {
     .filter((i) => i.symbol);
 }
 
+/* ----------------------------------------------------------- active stocks */
+
+/** 活跃股候选数量：A 股取成交额前 1000，港股主板前 300，美股（中概股 + 科技股）约 200 */
+export const ACTIVE_LIMIT = { cn: 1000, hk: 300, us: 200 };
+const EXCLUDED_NAME = /ST|退/i; // ST、*ST、退市整理
+
+/** 合法的活跃股候选：代码属于该市场、名称正常（非 ST / 退市）、有价格和成交 */
+const activeItem = (market, symbol, name, price, amount) =>
+  symbol && marketOf(symbol) === market && typeof name === 'string' && name.trim() && !EXCLUDED_NAME.test(name) && price > 0 && amount > 0
+    ? { symbol, name: name.trim(), amount }
+    : null;
+
+/** 按成交额从高到低去重、截断，只保留代码和名称 */
+function topByAmount(items, limit) {
+  const seen = new Set();
+  return items
+    .filter(Boolean)
+    .sort((a, b) => b.amount - a.amount)
+    .filter((i) => !seen.has(i.symbol) && seen.add(i.symbol))
+    .slice(0, limit)
+    .map(({ symbol, name }) => ({ symbol, name }));
+}
+
+/** A 股全市场列表（mktHs/rank，一次取全部）→ 成交额前 N 的活跃股。该接口只按涨跌幅排序，成交额用 现价 × 成交量 估算 */
+export function parseActiveCn(list, limit = ACTIVE_LIMIT.cn) {
+  return topByAmount(
+    parseMobileRankItems(list).map((r) => activeItem('cn', r.symbol, r.name, r.price, (r.price ?? 0) * (r.volume ?? 0))),
+    limit,
+  );
+}
+
+/** 港股主板按成交额排行（hk_rank.php）：page_data 为 "代码~名称~现价~涨跌幅~涨跌~…~成交量~成交额~…" */
+export function parseActiveHk(value, limit = ACTIVE_LIMIT.hk) {
+  const rows = Array.isArray(value?.data?.page_data) ? value.data.page_data : [];
+  return topByAmount(
+    rows.map((row) => {
+      const f = String(row).split('~');
+      return activeItem('hk', normalizeSymbol(`hk${f[0]}`), f[1], num(f[2]), num(f[8]));
+    }),
+    limit,
+  );
+}
+
+/** 美股列表（rank/us/getList 的 rank_list） */
+export function parseActiveUs(lists, limit = ACTIVE_LIMIT.us) {
+  return topByAmount(
+    lists.flat().map((r) => activeItem('us', normalizeSymbol(String(r?.code ?? '')), r?.name, num(r?.zxj), num(r?.turnover))),
+    limit,
+  );
+}
+
 /* ------------------------------------------------------------------ search */
 
 const SEARCH_MARKETS = new Set(['sh', 'sz', 'bj', 'hk', 'us']);
@@ -446,8 +499,9 @@ export function parseSearchValue(decoded) {
 /**
  * @param io       网络访问实现，见文件头注释
  * @param options.rankSource 'board'（完整排行，需服务端代理）| 'mobile'（支持 CORS，仅涨跌幅）
+ * @param options.usList     是否能访问美股列表接口（没有 CORS / JSONP，只有服务端可以）
  */
-export function createTencentProvider(io, { name = 'tencent', label = '腾讯财经', rankSource = 'board' } = {}) {
+export function createTencentProvider(io, { name = 'tencent', label = '腾讯财经', rankSource = 'board', usList = false } = {}) {
   const cache = new TTLCache({ maxEntries: 5000 });
   const mobileRank = rankSource === 'mobile';
 
@@ -640,12 +694,52 @@ export function createTencentProvider(io, { name = 'tencent', label = '腾讯财
     });
   }
 
+  /**
+   * 某个市场当前的活跃股（按成交额），用于给新访客随机挑选默认自选。缓存 10 分钟。
+   * @returns {Promise<{symbol: string, name: string}[]>}
+   */
+  async function getActiveStocks(market) {
+    const ttl = 10 * 60_000;
+    if (market === 'cn') {
+      return cache.wrap('active:cn', ttl, async () => {
+        const json = await io.json(`${RANK_MOBILE}?l=6000&p=1&t=ranka/chr&ordertype=&o=0`);
+        if (json?.code !== 0) throw new UpstreamError(`A 股列表接口错误: ${json?.msg ?? '未知'}`);
+        return parseActiveCn(json.data);
+      });
+    }
+    if (market === 'hk') {
+      return cache.wrap('active:hk', ttl, async () => {
+        const url = `${HK_RANK}?board=main_all&metric=amount&pageSize=${ACTIVE_LIMIT.hk}&reqPage=1&order=decs&var_name=v_hk_active`;
+        const value = await io.script(url, 'v_hk_active');
+        if (value?.code !== 0) throw new UpstreamError('港股列表接口错误');
+        return parseActiveHk(value);
+      });
+    }
+    if (market === 'us') {
+      if (!usList) throw new NotSupportedError('当前模式下无法获取美股列表');
+      return cache.wrap('active:us', ttl, async () => {
+        // 腾讯只公开「美股科技股」(tec) 与「中概股」(cdr) 两个列表，各取成交额靠前的部分
+        const lists = await Promise.all(
+          ['tec', 'cdr'].map(async (board) => {
+            const json = await io.json(`${US_LIST}?board_type=${board}&sort_type=turnover&direct=down&offset=0&count=150`);
+            if (json?.code !== 0) throw new UpstreamError(`美股列表接口错误: ${json?.msg ?? '未知'}`);
+            return json.data?.rank_list ?? [];
+          }),
+        );
+        return parseActiveUs(lists);
+      });
+    }
+    throw new NotSupportedError(`不支持的市场 ${market}`);
+  }
+
   return {
     name,
     label,
     capabilities: {
       rank: mobileRank ? { sorts: ['changePct'], boards: ['all'] } : null,
+      activeMarkets: usList ? ['cn', 'hk', 'us'] : ['cn', 'hk'],
     },
+    getActiveStocks,
     getQuotes,
     getQuote,
     getMarketStatus,

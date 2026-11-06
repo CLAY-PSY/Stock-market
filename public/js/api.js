@@ -93,6 +93,12 @@ export const api = {
       ? viaDirect(() => direct.getTicks(symbol, { limit }), opts.signal)
       : request(`api/ticks/${encodeURIComponent(symbol)}?${q({ limit })}`, opts),
 
+  /** 某个市场的活跃股列表 → { market, items: [{symbol, name}] }；静态模式下美股不可用（抛出错误） */
+  activeStocks: (market, opts = {}) =>
+    direct
+      ? viaDirect(async () => ({ market, items: await direct.getActiveStocks(market) }), opts.signal)
+      : request(`api/active-stocks?${q({ market })}`, opts),
+
   rank: (params, opts = {}) =>
     direct ? viaDirect(() => direct.getRank(params), opts.signal) : request(`api/rank?${q(params)}`, opts),
 };
