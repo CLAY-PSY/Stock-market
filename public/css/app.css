@@ -1294,6 +1294,13 @@ svg {
   line-height: 14px;
   min-width: 16px;
 }
+.footer {
+  flex-wrap: wrap;
+}
+.footer-copyright {
+  white-space: nowrap;
+  color: var(--text-2);
+}
 
 /* -------------------------------------------------------------- drawer */
 
@@ -2097,6 +2104,10 @@ select,
     padding: 10px max(12px, var(--safe-right)) 12px max(12px, var(--safe-left));
     border-top: 0;
     background: transparent;
+  }
+  .footer-copyright {
+    margin-top: 6px;
+    text-align: center;
   }
 
   /* 底部导航 */
