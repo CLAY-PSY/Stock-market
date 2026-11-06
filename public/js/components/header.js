@@ -107,6 +107,10 @@ export function initHeader({ onThemeChange }) {
   });
   renderMarketStatus(null);
   startClock();
+  // 版权年份：2026 起，跨年后显示为「2026–当前年份」
+  const year = new Date().getFullYear();
+  const years = $('#copyright-years');
+  if (years && year > 2026) years.textContent = `2026–${year}`;
   applyTheme();
   applyUpDown();
 
