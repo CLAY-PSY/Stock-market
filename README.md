@@ -62,7 +62,7 @@ docker run -p 3000:3000 stockpulse
 
 首次使用需要在仓库里开启一次：
 
-1. 打开仓库 **Settings → Pages**，在 **Build and deployment → Source** 中选择 **GitHub Actions**。
+1. 打开仓库 **Settings → Pages**，在 **Build and deployment → Source** 中选择 **GitHub Actions**。此时 GitHub 会推荐「Static HTML」等工作流模板，**不需要提交**：模板会把仓库原样发布，没有构建步骤，而且会和本项目的 `pages.yml` 互相覆盖。
 2. 合并到 `main`（或在 **Actions → Deploy to GitHub Pages → Run workflow** 手动运行）。
 3. 部署完成后访问 `https://<用户名>.github.io/<仓库名>/`，例如 <https://clay-psy.github.io/Stock-market/>。
 
