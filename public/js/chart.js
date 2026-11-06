@@ -131,7 +131,9 @@ export class StockChart {
         timeVisible: withTime,
         secondsVisible: false,
         rightOffset: leftScale ? 0 : 6,
-        minBarSpacing: 0.5,
+        // 分时图要把整段时间放进一屏：手机上五日港股分时约 1660 个点、绘图区只有 ~220px，
+        // 默认的最小间距 0.5px 只能放下 ~440 个点，图表会被截成最后一天多一点
+        minBarSpacing: this.mode === 'intraday' ? 0.01 : 0.5,
         tickMarkFormatter: (time, type) => {
           const d = utc(time);
           if (type === TickMarkType.Year) return `${d.getUTCFullYear()}`;
@@ -312,7 +314,8 @@ export class StockChart {
       },
       1,
     );
-    const volFactor = market === 'cn' ? 0.01 : 1;
+    this.volMeta = this.volumeMeta();
+    const volFactor = this.volMeta.factor;
     this.series.volume.setData(
       points.map((p, i) => ({
         time: p.time,
@@ -338,26 +341,42 @@ export class StockChart {
       : { date: sessions.at(-1)?.date, slot: null, cumBefore: 0, lastCum: null };
   }
 
+  /** 成交量面板的口径：A 股以「手」、港美股以「股」；港股指数没有成交股数，这一列实为成交额（港元） */
+  volumeMeta() {
+    if (this.data.volumeKind === 'amount') return { field: 'amount', factor: 1, label: '成交额', unit: '' };
+    return this.data.market === 'cn'
+      ? { field: 'volume', factor: 0.01, label: '成交量', unit: '手' }
+      : { field: 'volume', factor: 1, label: '成交量', unit: '股' };
+  }
+
+  /** 实时报价里与成交量面板同口径的当日累计值 */
+  liveCum(q) {
+    const v = q[this.volMeta?.field ?? 'volume'];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
+
   applyIntradayQuote(q) {
     const sessions = this.data.sessions;
     const lastSession = sessions.at(-1);
     const date = q.time.slice(0, 10);
     if (!lastSession || date !== lastSession.date) {
-      if (date > (lastSession?.date ?? '') && q.volume > 0) this.onStale?.();
+      if (date > (lastSession?.date ?? '') && this.liveCum(q) > 0) this.onStale?.();
       return;
     }
+    const cum = this.liveCum(q);
+    if (cum === null) return;
     const slot = slotForTime(this.data.market, q.time.slice(11));
     const time = chartTime(date, slot);
     const t = this.theme;
     const live = this.live;
     if (live.slot === null || slot > live.slot) {
-      live.cumBefore = live.lastCum ?? q.volume;
+      live.cumBefore = live.lastCum ?? cum;
       live.slot = slot;
     } else if (slot < live.slot) {
       return; // 乱序的旧报价
     }
-    const volume = Math.max(0, q.volume - live.cumBefore);
-    live.lastCum = q.volume;
+    const volume = Math.max(0, cum - live.cumBefore);
+    live.lastCum = cum;
 
     const point = { time, slot, date, price: q.price, avg: q.avgPrice ?? null, volume };
     const idx = this.pointIndex.get(time);
@@ -474,7 +493,8 @@ export class StockChart {
     const toTime = (b) => (minute ? chartTime(b.time.slice(0, 10), b.time.slice(11, 16)) : chartTime(b.time));
     this.barTimes = bars.map(toTime);
     this.barIndex = new Map(this.barTimes.map((time, i) => [time, i]));
-    this.volFactor = market === 'cn' ? 0.01 : 1;
+    this.volMeta = this.volumeMeta();
+    this.volFactor = this.volMeta.factor;
 
     this.series.candles = this.chart.addSeries(CandlestickSeries, {
       upColor: t.up,
@@ -546,23 +566,24 @@ export class StockChart {
     const hms = q.time.slice(11);
     const period = this.opts.period;
     const prevCum = this.live.cum;
-    const delta = prevCum !== null && q.volume >= prevCum ? q.volume - prevCum : 0;
-    this.live.cum = q.volume;
+    const cum = this.liveCum(q) ?? 0;
+    const delta = prevCum !== null && cum >= prevCum ? cum - prevCum : 0;
+    this.live.cum = cum;
 
     let bar = null;
     let append = false;
     if (period === 'day') {
       const lastDate = last.time.slice(0, 10);
-      if (date === lastDate) bar = { ...last, open: q.open ?? last.open, high: q.high ?? last.high, low: q.low ?? last.low, close: q.price, volume: q.volume };
-      else if (date > lastDate && q.volume > 0) {
-        bar = { time: date, open: q.open ?? q.price, high: q.high ?? q.price, low: q.low ?? q.price, close: q.price, volume: q.volume };
+      if (date === lastDate) bar = { ...last, open: q.open ?? last.open, high: q.high ?? last.high, low: q.low ?? last.low, close: q.price, volume: cum };
+      else if (date > lastDate && cum > 0) {
+        bar = { time: date, open: q.open ?? q.price, high: q.high ?? q.price, low: q.low ?? q.price, close: q.price, volume: cum };
         append = true;
       }
     } else if (period === 'week' || period === 'month') {
       const same = period === 'week' ? weekKey(date) === weekKey(last.time) : date.slice(0, 7) === last.time.slice(0, 7);
       if (same) bar = { ...last, high: Math.max(last.high, q.price), low: Math.min(last.low, q.price), close: q.price, volume: last.volume + delta };
-      else if (date > last.time && q.volume > 0) {
-        bar = { time: date, open: q.open ?? q.price, high: q.high ?? q.price, low: q.low ?? q.price, close: q.price, volume: q.volume };
+      else if (date > last.time && cum > 0) {
+        bar = { time: date, open: q.open ?? q.price, high: q.high ?? q.price, low: q.low ?? q.price, close: q.price, volume: cum };
         append = true;
       }
     } else {
@@ -649,11 +670,11 @@ export class StockChart {
     main.innerHTML = '<div class="lg-row">' + [
       `<span class="lg-time">${dateLabel}${p.slot}</span>`,
       `<span class="lg-item"><i class="sw" style="background:${this.theme.s1}"></i>价格 <b class="${dir}">${fmtPrice(p.price, d)}</b></span>`,
-      `<span class="lg-item">涨跌 <b class="${dir}">${fmtPct(pct)}</b></span>`,
+      `<span class="lg-item">${this.data.sessions.length > 1 ? `${this.data.sessions.length}日涨跌` : '涨跌'} <b class="${dir}">${fmtPct(pct)}</b></span>`,
       p.avg ? `<span class="lg-item"><i class="sw" style="background:${this.theme.s2}"></i>均价 <b>${fmtPrice(p.avg, d)}</b></span>` : '',
     ].join('') + '</div>';
-    const unit = this.data.market === 'cn' ? '手' : '股';
-    if (vol) vol.innerHTML = `<span class="lg-item">成交量 <b>${fmtBig(p.volume * this.volFactor, 2)}${unit}</b></span>`;
+    const { label, unit } = this.volMeta;
+    if (vol) vol.innerHTML = `<span class="lg-item">${label} <b>${fmtBig(p.volume * this.volFactor, 2)}${unit}</b></span>`;
   }
 
   renderKlineLegend(param) {
@@ -692,8 +713,8 @@ export class StockChart {
         <span class="lg-item lg-opt">振幅 <b>${amp.toFixed(2)}%</b></span>
       </div>
       <div class="lg-row">${items(0)}</div>`;
-    const unit = this.data.market === 'cn' ? '手' : '股';
-    if (vol) vol.innerHTML = `<span class="lg-item">VOL <b>${fmtBig(b.volume * this.volFactor, 2)}${unit}</b></span>`;
+    const { label, unit } = this.volMeta;
+    if (vol) vol.innerHTML = `<span class="lg-item">${label === '成交额' ? label : 'VOL'} <b>${fmtBig(b.volume * this.volFactor, 2)}${unit}</b></span>`;
     if (sub) {
       const title = { MACD: 'MACD(12,26,9)', KDJ: 'KDJ(9,3,3)', RSI: 'RSI(6,12,24)' }[this.opts.sub] ?? '';
       sub.innerHTML = `<span class="lg-time">${title}</span>${items(2)}`;

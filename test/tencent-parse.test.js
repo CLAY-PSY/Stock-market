@@ -75,6 +75,24 @@ test('指数没有盘口，无效代码被忽略', () => {
   assert.equal(quotes.has('sh999999'), false);
 });
 
+test('港股指数：没有成交股数，成交额按万港元换算；美股指数不给出成交额', () => {
+  const quotes = parseQuoteResponse(fixture('qt-index.txt'));
+  const hsi = quotes.get('hkHSI');
+  assert.equal(hsi.volume, null);
+  assert.ok(hsi.amount > 1e10, `恒指成交额应为百亿港元量级，实际 ${hsi.amount}`);
+  assert.equal(quotes.get('usDJI').amount, null);
+  assert.ok(quotes.get('usDJI').volume > 0, '美股指数的成交量（股）照常给出');
+  assert.ok(quotes.get('sh000001').amount > 0, 'A 股指数成交额不受影响');
+});
+
+test('分时：港股指数用累计成交额（第 4 列）作为量柱', () => {
+  const rows = ['0930 24404.620 428095 4280946995.958', '0931 24462.940 1151420 11514195449.458'];
+  const pts = parseMinuteRows(rows, { market: 'hk', withAvg: false, volumeFromAmount: true });
+  assert.equal(pts[0].volume, 4280946995.958);
+  assert.equal(Math.round(pts[1].volume), Math.round(11514195449.458 - 4280946995.958));
+  assert.equal(pts[1].avg, null);
+});
+
 test('parseQuoteTime 支持三种时间格式', () => {
   assert.equal(parseQuoteTime('20261106100724', 'cn').time, '2026-11-06 10:07:24');
   assert.equal(parseQuoteTime('2026/11/06 10:08:50', 'hk').time, '2026-11-06 10:08:50');
