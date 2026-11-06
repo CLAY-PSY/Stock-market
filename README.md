@@ -81,7 +81,7 @@ npm run build:static         # 生成 dist/
 npx serve dist               # 或任意静态文件服务器
 ```
 
-页面根据 `<meta name="stockpulse-mode">` 选择模式（`auto` 自动探测 / `server` / `static`），也可以用 `?mode=static` 临时指定。
+页面根据 `<meta name="stockpulse-mode">` 选择模式：Node.js 服务返回页面时写为 `server`，静态构建写为 `static`；为 `auto`（例如用其它静态服务器直接打开 `public/`）时自动探测，也可以用 `?mode=static` 指定。
 
 ## 配置
 

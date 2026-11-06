@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import express from 'express';
@@ -8,6 +9,8 @@ import { logger } from './lib/logger.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(here, '../public');
 const SHARED_DIR = path.resolve(here, '../shared'); // 服务端与浏览器共用的模块
+const MODE_META_AUTO = '<meta name="stockpulse-mode" content="auto" />';
+const MODE_META_SERVER = '<meta name="stockpulse-mode" content="server" />';
 const require = createRequire(import.meta.url);
 const CHARTS_FILE = path.join(
   path.dirname(require.resolve('lightweight-charts/package.json')),
@@ -160,8 +163,18 @@ export function createApp({ provider, hub }) {
 
   app.use('/shared', express.static(SHARED_DIR, { etag: true, maxAge: '5m' }));
 
+  // 首页由服务端改写运行模式为 server：页面不会再探测或回落到浏览器直连模式，
+  // 否则直连请求会被上面的 CSP（connect-src / script-src 'self'）拦截
+  const sendIndex = async (req, res) => {
+    const html = await readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type('html').send(html.replace(MODE_META_AUTO, MODE_META_SERVER));
+  };
+  app.get(['/', '/index.html'], sendIndex);
+
   app.use(
     express.static(PUBLIC_DIR, {
+      index: false,
       etag: true,
       setHeaders(res, filePath) {
         // HTML 始终回源校验，静态资源允许短期缓存（ETag 负责更新）
@@ -173,8 +186,7 @@ export function createApp({ provider, hub }) {
   // 未匹配的页面路由回落到首页（前端用 hash 路由，这里只是兜底）
   app.use((req, res, next) => {
     if (req.method !== 'GET' || !req.accepts('html')) return next();
-    res.setHeader('Cache-Control', 'no-cache');
-    return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+    return sendIndex(req, res);
   });
 
   // eslint-disable-next-line no-unused-vars

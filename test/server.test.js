@@ -85,7 +85,16 @@ test('K 线 / 分时 / 排行 / 搜索', async () => {
 test('页面与图表库静态资源', async () => {
   const page = await fetch(`http://${base}/`);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /StockPulse/);
+  const html = await page.text();
+  assert.match(html, /StockPulse/);
+  // 服务端返回的页面固定为 server 模式，不会回落到被 CSP 拦截的直连模式
+  assert.match(html, /<meta name="stockpulse-mode" content="server" \/>/);
+  for (const path of ['/index.html', '/some/deep/link']) {
+    const res = await fetch(`http://${base}${path}`, { headers: { Accept: 'text/html' } });
+    assert.match(await res.text(), /content="server"/, path);
+  }
+  const shared = await fetch(`http://${base}/shared/tencent.js`);
+  assert.equal(shared.status, 200);
   const lib = await fetch(`http://${base}/vendor/lightweight-charts.mjs`);
   assert.equal(lib.status, 200);
   assert.match(lib.headers.get('content-type'), /javascript/);

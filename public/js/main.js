@@ -33,12 +33,15 @@ function pick(symbol) {
  * 运行模式：
  *   server — 由本项目的 Node.js 服务提供数据（WebSocket 推送）；
  *   static — 纯静态托管（GitHub Pages 等），浏览器直连行情接口并在本地轮询。
- * 优先级：URL 参数 ?mode= → <meta name="stockpulse-mode">（构建 GitHub Pages 时写为 static）→ 自动探测。
+ * <meta name="stockpulse-mode"> 由托管方声明：Node.js 服务返回页面时写为 server，GitHub Pages 构建时写为 static。
+ * 托管方已声明时以它为准（服务端的 CSP 只允许同源请求，强行切到直连模式会被拦截）；
+ * 只有 auto（例如用其它静态服务器直接打开 public/）时才看 URL 参数 ?mode=，再自动探测。
  */
 async function detectMode() {
-  const forced = new URLSearchParams(location.search).get('mode');
-  const declared = forced || document.querySelector('meta[name="stockpulse-mode"]')?.content || 'auto';
+  const declared = document.querySelector('meta[name="stockpulse-mode"]')?.content || 'auto';
   if (declared === 'server' || declared === 'static') return declared;
+  const forced = new URLSearchParams(location.search).get('mode');
+  if (forced === 'server' || forced === 'static') return forced;
   try {
     const res = await fetch('api/health', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
     if (res.ok && (await res.json())?.ok) return 'server';
