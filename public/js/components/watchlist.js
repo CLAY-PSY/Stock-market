@@ -1,4 +1,4 @@
-import { $, $$, h, flash, icons } from '../dom.js';
+import { $, $$, h, flash, icons, activatable } from '../dom.js';
 import { store } from '../store.js';
 import { fmtPrice, fmtPct, trend, exchangeTag, displayCode, marketOf, escapeHtml } from '../format.js';
 import { toast } from './toast.js';
@@ -47,7 +47,12 @@ export function initWatchlist({ onPick }) {
   };
 
   let dragSymbol = null;
-  const clearDropMarks = () => $$('.drop-before', list).forEach((el) => el.classList.toggle('drop-before', false));
+  let dropAfter = false;
+  const clearDropMarks = () =>
+    $$('.drop-before, .drop-after', list).forEach((el) => {
+      el.classList.toggle('drop-before', false);
+      el.classList.toggle('drop-after', false);
+    });
 
   /* 编辑模式：删除 / 置顶 / 上移 / 下移。触屏设备没有悬停，也不支持 HTML5 拖拽，靠它来管理自选 */
   let editing = false;
@@ -155,6 +160,9 @@ export function initWatchlist({ onPick }) {
       li.addEventListener('click', () => {
         if (!editing) onPick(symbol);
       });
+      activatable(li, () => {
+        if (!editing) onPick(symbol);
+      });
       deleteBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         removeSymbol(symbol);
@@ -174,15 +182,24 @@ export function initWatchlist({ onPick }) {
         li.classList.toggle('dragging', false);
         clearDropMarks();
       });
+      // 指针在行的上半部分放到它前面，下半部分放到它后面（这样也能拖到列表最后一位）
       li.addEventListener('dragover', (e) => {
         if (!dragSymbol || dragSymbol === symbol) return;
         e.preventDefault();
+        const r = li.getBoundingClientRect();
+        dropAfter = e.clientY > r.top + r.height / 2;
         clearDropMarks();
-        li.classList.add('drop-before');
+        li.classList.add(dropAfter ? 'drop-after' : 'drop-before');
       });
       li.addEventListener('drop', (e) => {
         e.preventDefault();
-        if (dragSymbol && dragSymbol !== symbol) store.moveInWatchlist(dragSymbol, symbol);
+        if (!dragSymbol || dragSymbol === symbol) return;
+        if (!dropAfter) {
+          store.moveInWatchlist(dragSymbol, symbol);
+          return;
+        }
+        const rest = store.watchlist.filter((s) => s !== dragSymbol);
+        store.moveInWatchlist(dragSymbol, rest[rest.indexOf(symbol) + 1] ?? null);
       });
       list.append(li);
       rows.set(symbol, { li, name, price, chg });
@@ -240,14 +257,17 @@ export function initWatchlist({ onPick }) {
   // 键盘 ↑↓ 在自选股间切换
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    if (e.target.closest?.('input, textarea, select, dialog[open], .drawer')) return;
+    if (e.target.closest?.('input, textarea, select, dialog[open], .drawer, .rank-list, .search-results')) return;
     const syms = visibleSymbols();
     if (!syms.length) return;
     e.preventDefault();
     const idx = syms.indexOf(store.selected);
     const next = e.key === 'ArrowDown' ? (idx + 1) % syms.length : (idx - 1 + syms.length) % syms.length;
     // 键盘连续切换不写入历史记录，否则返回键要按很多次
-    onPick(syms[idx < 0 ? 0 : next], { replace: true });
+    const target = syms[idx < 0 ? 0 : next];
+    onPick(target, { replace: true });
+    // 焦点原本在自选列表里时，跟着移到新选中的那一行
+    if (e.target.closest?.('.wl-list')) rows.get(target)?.li.focus({ preventScroll: true });
   });
 
   render();

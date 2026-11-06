@@ -41,6 +41,7 @@
   --warn: #946014;
   --warn-bg: #fff7e6;
   --tag-hk: #ad3a0b;
+  --open: #15803d; /* 「交易中」状态文字：浅色背景上对比度 ≥ 4.5 */
 }
 
 :root[data-theme='dark'] {
@@ -71,6 +72,7 @@
   --warn: #f2b84b;
   --warn-bg: rgba(242, 184, 75, 0.12);
   --tag-hk: #fb923c;
+  --open: #22c55e;
 }
 
 /* 红涨绿跌（默认）/ 绿涨红跌 */
@@ -130,8 +132,10 @@ a {
   color: var(--accent);
   text-decoration: none;
 }
-a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  a:hover {
+    text-decoration: underline;
+  }
 }
 
 kbd {
@@ -160,6 +164,9 @@ svg {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+input[type='checkbox'] {
+  accent-color: var(--accent-fill);
 }
 
 .up {
@@ -209,8 +216,10 @@ svg {
   color: var(--text);
   flex: none;
 }
-.brand:hover {
-  text-decoration: none;
+@media (hover: hover) {
+  .brand:hover {
+    text-decoration: none;
+  }
 }
 .brand-logo svg {
   width: 28px;
@@ -333,9 +342,11 @@ svg {
   place-items: center;
   color: var(--text-2);
 }
-.search-results .sr-add:hover {
-  background: var(--panel-3);
-  color: var(--accent);
+@media (hover: hover) {
+  .search-results .sr-add:hover {
+    background: var(--panel-3);
+    color: var(--accent);
+  }
 }
 .search-results .sr-add.added {
   color: var(--accent);
@@ -423,6 +434,7 @@ svg {
   white-space: nowrap;
 }
 .conn-dot {
+  position: relative;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -430,20 +442,30 @@ svg {
 }
 .conn.open .conn-dot {
   background: #22c55e;
-  animation: pulse 2s infinite;
+}
+.conn.open .conn-dot::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.5);
+  animation: pulse 2s ease-out infinite;
 }
 .conn.down .conn-dot {
   background: var(--red);
 }
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+    transform: scale(1);
+    opacity: 1;
   }
-  70% {
-    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
-  }
+  70%,
   100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    transform: scale(2.5);
+    opacity: 0;
   }
 }
 .clock {
@@ -471,10 +493,12 @@ svg {
   font-size: 12px;
   border-color: var(--border);
 }
-.icon-btn:hover,
-.text-btn:hover {
-  background: var(--panel-3);
-  color: var(--text);
+@media (hover: hover) {
+  .icon-btn:hover,
+  .text-btn:hover {
+    background: var(--panel-3);
+    color: var(--text);
+  }
 }
 .icon-btn [data-icon] {
   display: flex;
@@ -540,8 +564,10 @@ svg {
   text-align: left;
   transition: background 0.15s;
 }
-.tk:hover {
-  background: var(--panel-2);
+@media (hover: hover) {
+  .tk:hover {
+    background: var(--panel-2);
+  }
 }
 .tk.active {
   background: var(--accent-soft);
@@ -666,9 +692,11 @@ svg {
   font-size: 12px;
   line-height: 18px;
 }
-.tabs button:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--panel-3);
+@media (hover: hover) {
+  .tabs button:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--panel-3);
+  }
 }
 .tabs button[aria-pressed='true'] {
   color: var(--accent);
@@ -716,8 +744,10 @@ svg {
 .wl-head button:first-child {
   text-align: left;
 }
-.wl-head button:hover {
-  color: var(--text);
+@media (hover: hover) {
+  .wl-head button:hover {
+    color: var(--text);
+  }
 }
 .wl-head button[data-dir]::after {
   content: ' ↓';
@@ -751,8 +781,14 @@ svg {
   border-bottom: 1px solid var(--border);
   transition: background 0.12s;
 }
-.wl-item:hover {
-  background: var(--panel-2);
+@media (hover: hover) {
+  .wl-item:hover {
+    background: var(--panel-2);
+  }
+}
+.wl-item:focus-visible,
+.rank-item:focus-visible {
+  outline-offset: -2px;
 }
 .wl-item[aria-selected='true'] {
   background: var(--accent-soft);
@@ -763,6 +799,9 @@ svg {
 }
 .wl-item.drop-before {
   box-shadow: inset 0 2px 0 var(--accent);
+}
+.wl-item.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 .wl-name {
   min-width: 0;
@@ -826,11 +865,18 @@ svg {
   width: 12px;
   height: 12px;
 }
-.wl-item:hover .wl-remove {
+@media (hover: hover) {
+  .wl-item:hover .wl-remove {
+    display: grid;
+  }
+}
+.wl-item:focus-within .wl-remove {
   display: grid;
 }
-.wl-remove:hover {
-  color: var(--red);
+@media (hover: hover) {
+  .wl-remove:hover {
+    color: var(--red);
+  }
 }
 .empty {
   padding: 28px 16px;
@@ -878,8 +924,10 @@ svg {
   border-top: 1px solid var(--border);
   cursor: pointer;
 }
-.rank-item:hover {
-  background: var(--panel-2);
+@media (hover: hover) {
+  .rank-item:hover {
+    background: var(--panel-2);
+  }
 }
 .rank-no {
   font: 600 11px var(--font-num);
@@ -950,7 +998,7 @@ svg {
   border: 1px solid var(--border);
 }
 .q-status.open {
-  color: #16a34a;
+  color: var(--open);
   border-color: rgba(22, 163, 74, 0.35);
 }
 .q-meta {
@@ -995,8 +1043,10 @@ svg {
   color: var(--text);
   transition: background 0.15s, border-color 0.15s;
 }
-.btn:hover {
-  background: var(--panel-3);
+@media (hover: hover) {
+  .btn:hover {
+    background: var(--panel-3);
+  }
 }
 .btn svg {
   width: 15px;
@@ -1007,8 +1057,10 @@ svg {
   border-color: var(--accent-fill);
   color: #fff;
 }
-.btn-primary:hover {
-  background: color-mix(in srgb, var(--accent-fill) 88%, #000);
+@media (hover: hover) {
+  .btn-primary:hover {
+    background: color-mix(in srgb, var(--accent-fill) 88%, #000);
+  }
 }
 .btn.on svg {
   fill: var(--series-2);
@@ -1074,7 +1126,10 @@ svg {
 }
 .chart {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
 }
 .chart-legend {
   position: absolute;
@@ -1131,7 +1186,10 @@ svg {
 }
 .chart-overlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 5;
   display: grid;
   place-items: center;
@@ -1340,8 +1398,12 @@ svg {
 /* -------------------------------------------------------------- drawer */
 
 .scrim {
+  animation: fade-in 0.18s ease-out;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: rgba(0, 0, 0, 0.35);
   z-index: 50;
 }
@@ -1362,9 +1424,32 @@ svg {
 .drawer[hidden] {
   display: none;
 }
+/* 收起：先播放滑出动画，结束后再隐藏（见 alerts.js） */
+.drawer.closing {
+  animation: slide-out 0.16s ease-in forwards;
+}
+.scrim.closing {
+  animation: fade-out 0.16s ease-in forwards;
+}
 @keyframes slide-in {
   from {
     transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes slide-out {
+  to {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes fade-out {
+  to {
     opacity: 0;
   }
 }
@@ -1410,6 +1495,8 @@ svg {
 .alert-title {
   font-weight: 600;
   cursor: pointer;
+  text-align: left;
+  justify-self: start;
 }
 .alert-title span {
   font-weight: 400;
@@ -1449,6 +1536,18 @@ svg {
 }
 .dialog::backdrop {
   background: rgba(0, 0, 0, 0.45);
+}
+.dialog[open] {
+  animation: dialog-in 0.18s ease-out;
+}
+.dialog[open]::backdrop {
+  animation: fade-in 0.18s ease-out;
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
 }
 .dialog form {
   padding: 18px 20px 16px;
@@ -1632,7 +1731,29 @@ select,
   }
 }
 
+/* 触屏：没有悬停，用按下时的底色给出反馈 */
+.touch .btn:active,
+.touch .icon-btn:active,
+.touch .text-btn:active,
+.touch .tk:active,
+.touch .wl-item:active,
+.touch .rank-item:active,
+.touch .tabs button:active:not(:disabled),
+.touch .seg button:active,
+.touch .search-results .sr-add:active,
+.touch .wl-op:active:not(:disabled),
+.touch .link-btn:active {
+  background: var(--panel-3);
+}
+.touch .btn-primary:active {
+  background: var(--accent-fill);
+  filter: brightness(0.9);
+}
+
 /* 粗指针（触屏）设备加大点击区域 */
+.touch .link-btn {
+  padding: 6px 8px;
+}
 .touch .tabs button {
   padding: 7px 11px;
 }
@@ -1643,7 +1764,7 @@ select,
   padding: 4px 9px;
 }
 .touch .wl-head button {
-  padding: 4px 0;
+  padding: 8px 0;
 }
 .touch .icon-btn {
   min-width: 38px;
@@ -1753,7 +1874,10 @@ select,
 /* <dialog> 不支持 showModal 时的退化样式 */
 .dialog.dialog-fallback[open] {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   margin: auto;
   height: fit-content;
   z-index: 95;
@@ -1872,7 +1996,10 @@ select,
   }
   .search.open {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 90;
     display: flex;
     flex-direction: column;
@@ -2378,6 +2505,41 @@ select,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* 指示灯的扩散圈直接去掉；加载圈保留静态样式 */
+  .conn.open .conn-dot::after {
+    display: none;
+  }
+}
+
+/* 强制颜色模式（Windows 高对比度）：系统会改写所有颜色，选中状态和状态圆点需要另外表达 */
+@media (forced-colors: active) {
+  .conn-dot,
+  .mkt-dot,
+  .wl-chg,
+  .book-bar,
+  .book-ratio,
+  .sw,
+  .up,
+  .down {
+    forced-color-adjust: none;
+  }
+  .seg button[aria-pressed='true'],
+  .tabs button[aria-pressed='true'],
+  .wl-item[aria-selected='true'],
+  .tk.active,
+  .search-results li[aria-selected='true'],
+  .tabbar button[aria-current='page'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .panel,
+  .drawer,
+  .dialog,
+  .toast {
+    border: 1px solid CanvasText;
   }
 }
