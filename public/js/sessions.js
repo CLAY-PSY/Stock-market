@@ -53,6 +53,9 @@ export function chartTime(date, hhmm = '00:00') {
 }
 
 /** A 股分钟 K 线的归属时间（以结束时间标记，按上午 / 下午时段分别对齐） */
+/** 是否分钟 K 线周期（m1 / m5 / m15 / m30 / m60）。注意不能用 startsWith('m')：月 K 的周期名 month 也以 m 开头 */
+export const isMinutePeriod = (period) => /^m\d+$/.test(String(period ?? ''));
+
 export function minuteBucket(period, hhmmss) {
   const n = Number(period.slice(1));
   const [h, m, s] = hhmmss.split(':').map(Number);

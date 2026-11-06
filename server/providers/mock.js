@@ -232,7 +232,7 @@ async function getMinute(symbol, { days = 1 } = {}) {
 
 async function getKline(symbol, { period = 'day', count = 320 } = {}) {
   const market = marketOf(symbol);
-  const minute = period.startsWith('m');
+  const minute = /^m\d+$/.test(period); // 不能用 startsWith('m')：month 也以 m 开头
   if (minute && market !== 'cn') throw new NotSupportedError('分钟 K 线目前仅支持沪深京市场');
   const q = quoteOf(symbol);
   const n = Math.min(640, Math.max(10, count | 0));

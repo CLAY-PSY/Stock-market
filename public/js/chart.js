@@ -17,7 +17,7 @@ import {
   TrackingModeExitMode,
 } from '../vendor/lightweight-charts.mjs';
 import { sma, boll, macd, kdj, rsi } from './indicators.js';
-import { sessionSlots, slotForTime, chartTime, minuteBucket } from './sessions.js';
+import { sessionSlots, slotForTime, chartTime, minuteBucket, isMinutePeriod } from './sessions.js';
 import { fmtBig, fmtPct, fmtPrice, escapeHtml } from './format.js';
 
 const TickMarkType = { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 };
@@ -128,22 +128,27 @@ export class StockChart {
         vertLine: { color: t.crosshair, labelBackgroundColor: t.border, style: LineStyle.Dashed },
         horzLine: { color: t.crosshair, labelBackgroundColor: t.border, style: LineStyle.Dashed },
       },
-      rightPriceScale: { borderColor: t.border, minimumWidth: narrow ? 46 : 64 },
-      leftPriceScale: { visible: leftScale, borderColor: t.border, minimumWidth: narrow ? 40 : 56 },
+      // entireTextOnly：面板上下边缘放不下完整文字的刻度不画，否则会被面板分隔线压住半截（如成交量的「0」与 MACD 的「20.00」挤在一起）
+      rightPriceScale: { borderColor: t.border, minimumWidth: narrow ? 46 : 64, entireTextOnly: true },
+      leftPriceScale: { visible: leftScale, borderColor: t.border, minimumWidth: narrow ? 40 : 56, entireTextOnly: true },
       timeScale: {
         borderColor: t.border,
         timeVisible: withTime,
         secondsVisible: false,
         rightOffset: leftScale ? 0 : 6,
+        // 不能拖到第一根 K 线左边的空白处（数据起点的刻度由图表库对齐到可见区域内）
+        fixLeftEdge: true,
         // 分时图要把整段时间放进一屏：手机上五日港股分时约 1660 个点、绘图区只有 ~220px，
         // 默认的最小间距 0.5px 只能放下 ~440 个点，图表会被截成最后一天多一点
         minBarSpacing: this.mode === 'intraday' ? 0.01 : 0.5,
         tickMarkFormatter: (time, type) => {
           const d = utc(time);
-          if (type === TickMarkType.Year) return `${d.getUTCFullYear()}`;
-          if (type === TickMarkType.Month) return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
-          if (type === TickMarkType.DayOfMonth) return `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-          return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+          let label;
+          if (type === TickMarkType.Year) label = `${d.getUTCFullYear()}`;
+          else if (type === TickMarkType.Month) label = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
+          else if (type === TickMarkType.DayOfMonth) label = `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+          else label = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+          return this.clippedAtEdge(time, label) ? '' : label;
         },
       },
       localization: {
@@ -165,6 +170,28 @@ export class StockChart {
     });
 
     this.chart.subscribeCrosshairMove((param) => this.renderLegend(param));
+
+    // 时间刻度标签按时间缓存；可视范围变化后清空缓存（重新设置一次本地化选项即可），让边缘判断按新位置重新计算
+    this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+      if (this.mode !== 'kline' || this.edgeFrame) return;
+      this.edgeFrame = requestAnimationFrame(() => {
+        this.edgeFrame = 0;
+        this.chart?.applyOptions({ localization: { locale: 'zh-CN' } });
+      });
+    });
+  }
+
+  /**
+   * K 线拖动到中间位置时，图表库只把「数据起点 / 终点」附近的时间刻度挪进可见区域，
+   * 可视区域左右边缘的刻度会被截掉一半（例如「2026-05」只剩「5-05」）。这类刻度直接不显示。
+   */
+  clippedAtEdge(time, label) {
+    if (this.mode !== 'kline' || !this.chart || !this.barIndex) return false;
+    if ((this.barIndex.get(time) ?? Infinity) < 12) return false; // 数据起点附近：图表库会自己对齐
+    const x = this.chart.timeScale().timeToCoordinate(time);
+    if (x === null) return false;
+    const half = label.length * 3.5 + 3; // 11px 数字约 7px 宽
+    return x < half || x > this.chart.timeScale().width() - half;
   }
 
   priceFormat(decimals) {
@@ -335,6 +362,7 @@ export class StockChart {
     this.volFactor = volFactor;
     this.chart.panes()[0].setStretchFactor(3);
     this.chart.panes()[1]?.setStretchFactor(1);
+    if (this.chart.panes()[1]) this.chart.priceScale('right', 1).applyOptions({ entireTextOnly: true });
 
     this.addLegend(0);
     this.addLegend(1);
@@ -497,7 +525,7 @@ export class StockChart {
   renderKline() {
     const { bars, market } = this.data;
     const period = this.opts.period;
-    const minute = period.startsWith('m');
+    const minute = isMinutePeriod(period);
     const decimals = this.data.decimals ?? 2;
     this.createBase({ decimals, withTime: minute });
     const t = this.theme;
@@ -552,7 +580,11 @@ export class StockChart {
     panes[0].setStretchFactor(3.2);
     panes[1]?.setStretchFactor(1);
     panes[2]?.setStretchFactor(1.1);
-    panes.forEach((_, i) => this.addLegend(i));
+    panes.forEach((_, i) => {
+      this.addLegend(i);
+      // 副图（成交量 / 指标）各自的价格轴也只画完整的边缘刻度
+      if (i > 0) this.chart.priceScale('right', i).applyOptions({ entireTextOnly: true });
+    });
 
     const n = bars.length;
     const visible = minute ? 160 : 130;
@@ -608,7 +640,7 @@ export class StockChart {
     }
     if (!bar) return;
 
-    const minute = period.startsWith('m');
+    const minute = isMinutePeriod(period);
     const time = minute ? chartTime(bar.time.slice(0, 10), bar.time.slice(11, 16)) : chartTime(bar.time);
     if (append) {
       bars.push(bar);
@@ -703,7 +735,7 @@ export class StockChart {
     const chg = ((b.close - prevClose) / prevClose) * 100;
     const amp = ((b.high - b.low) / prevClose) * 100;
     const dir = (v) => (v > prevClose ? 'up' : v < prevClose ? 'down' : 'flat');
-    const minute = this.opts.period.startsWith('m');
+    const minute = isMinutePeriod(this.opts.period);
     const items = (pane) =>
       this.defs
         .filter((def) => def.pane === pane)
