@@ -2,6 +2,8 @@
  * 全局状态 + 本地持久化（自选股、提醒、偏好设置）。
  * 组件通过 store.on(event, fn) 订阅变化，避免互相直接依赖。
  */
+import { migrateSettings, SETTINGS_VERSION } from './theme.js';
+
 const STORAGE_KEY = 'stockpulse:v1';
 
 export const INDICES = [
@@ -34,7 +36,8 @@ const DEFAULT_WATCHLIST = [
 ];
 
 const DEFAULT_SETTINGS = {
-  theme: null, // null = 跟随系统
+  settingsVersion: SETTINGS_VERSION,
+  theme: 'auto', // auto 跟随系统 / light / dark
   colorMode: 'cn', // cn: 红涨绿跌；intl: 绿涨红跌
   period: 'minute',
   adjust: 'qfq',
@@ -58,7 +61,10 @@ function load() {
 class Store {
   constructor() {
     const saved = load() ?? {};
-    this.settings = { ...DEFAULT_SETTINGS, ...(saved.settings ?? {}) };
+    // 先迁移已保存的设置再合并默认值（否则默认值里的版本号会掩盖旧设置）
+    const savedSettings = saved.settings ? migrateSettings(saved.settings) : {};
+    this.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
+    if (saved.settings && saved.settings.settingsVersion !== SETTINGS_VERSION) this.persist();
     this.watchlist = Array.isArray(saved.watchlist) ? saved.watchlist.filter((s) => typeof s === 'string') : [...DEFAULT_WATCHLIST];
     this.alerts = Array.isArray(saved.alerts) ? saved.alerts : [];
     this.selected = typeof saved.selected === 'string' ? saved.selected : this.watchlist[0] ?? 'sh600519';

@@ -53,16 +53,22 @@
   } catch (e) {
     /* 隐私模式等情况下 localStorage 不可用 */
   }
-  var theme = settings.theme;
-  if (theme !== 'light' && theme !== 'dark') {
-    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  }
+  // 主题模式：auto 跟随系统 / light / dark（与 js/theme.js 保持一致）。
+  // v1 设置里的主题是点过按钮后被锁定的深 / 浅色，升级后视为「跟随系统」
+  var mode = (Number(settings.settingsVersion) || 1) < 2 ? 'auto' : settings.theme;
+  if (mode !== 'light' && mode !== 'dark') mode = 'auto';
+  var systemLight = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+  var theme = mode === 'auto' ? (systemLight ? 'light' : 'dark') : mode;
   root.setAttribute('data-theme', theme);
+  root.setAttribute('data-theme-mode', mode);
   root.setAttribute('data-updown', settings.colorMode === 'intl' ? 'intl' : 'cn');
 
-  // 浏览器地址栏 / 状态栏颜色与主题一致
-  var themeColor = document.querySelector('meta[name="theme-color"]');
-  if (themeColor) themeColor.setAttribute('content', theme === 'dark' ? '#11161f' : '#ffffff');
+  // 浏览器地址栏 / 状态栏颜色：手动指定主题时，两个按系统外观区分的 meta 都改成所选主题的颜色
+  if (mode !== 'auto') {
+    var color = theme === 'dark' ? '#11161f' : '#ffffff';
+    var metas = document.querySelectorAll('meta[name="theme-color"]');
+    for (var i = 0; i < metas.length; i += 1) metas[i].setAttribute('content', color);
+  }
 
   var mq = function (q) {
     return !!(window.matchMedia && window.matchMedia(q).matches);

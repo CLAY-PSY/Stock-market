@@ -5,6 +5,25 @@ import { sma, ema, boll, macd, kdj, rsi } from '../public/js/indicators.js';
 import { fmtBig, fmtPct, fmtVolume, fmtChange, trend, escapeHtml } from '../public/js/format.js';
 import { sessionSlots, slotForTime, chartTime, minuteBucket } from '../public/js/sessions.js';
 import { evaluateAlert, describeAlert, validateAlertInput } from '../public/js/alert-rules.js';
+import { resolveTheme, nextThemeMode, migrateSettings, normalizeThemeMode } from '../public/js/theme.js';
+
+test('主题：跟随系统 / 浅色 / 深色', () => {
+  assert.equal(resolveTheme('auto', true), 'light');
+  assert.equal(resolveTheme('auto', false), 'dark');
+  assert.equal(resolveTheme('light', false), 'light', '手动指定时不受系统影响');
+  assert.equal(resolveTheme('dark', true), 'dark');
+  assert.equal(resolveTheme(null, true), 'light', '未设置视为跟随系统');
+  assert.equal(normalizeThemeMode('purple'), 'auto');
+  assert.deepEqual(['auto', 'light', 'dark', 'auto'].slice(1), [nextThemeMode('auto'), nextThemeMode('light'), nextThemeMode('dark')]);
+});
+
+test('主题设置迁移：旧版锁定的深 / 浅色恢复为跟随系统，新版设置保持不变', () => {
+  assert.equal(migrateSettings({ theme: 'dark', colorMode: 'intl' }).theme, 'auto');
+  assert.equal(migrateSettings({ theme: 'dark', colorMode: 'intl' }).colorMode, 'intl', '其它设置不受影响');
+  assert.equal(migrateSettings({ theme: 'light', settingsVersion: 2 }).theme, 'light');
+  assert.equal(migrateSettings({ settingsVersion: 2 }).theme, 'auto');
+  assert.equal(migrateSettings({}).settingsVersion, 2);
+});
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
