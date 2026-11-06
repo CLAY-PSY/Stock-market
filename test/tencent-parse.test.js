@@ -12,6 +12,7 @@ import {
   parseMobileRankItems,
   extractJsVar,
   createTencentProvider,
+  sanitizeSearchQuery,
 } from '../shared/tencent.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -220,4 +221,13 @@ test('搜索结果解析：解码 \\u 转义、过滤涡轮、规范化代码', 
     ],
   );
   assert.deepEqual(parseSearchResponse('v_hint="N";'), []);
+});
+
+test('搜索关键字净化：去掉会被上游拒绝的符号，保留代码中的 . 和 -', () => {
+  assert.equal(sanitizeSearchQuery('<script>alert(1)</script>'), 'script alert 1 script');
+  assert.equal(sanitizeSearchQuery('  BRK.B  '), 'BRK.B');
+  assert.equal(sanitizeSearchQuery('贵州茅台'), '贵州茅台');
+  assert.equal(sanitizeSearchQuery('"\'<>'), '');
+  assert.equal(sanitizeSearchQuery('a'.repeat(100)).length, 32);
+  assert.equal(sanitizeSearchQuery(null), '');
 });

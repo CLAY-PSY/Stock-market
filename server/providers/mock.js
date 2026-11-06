@@ -278,7 +278,13 @@ async function getTicks(symbol, { limit = 60 } = {}) {
   return { symbol, supported: true, ticks };
 }
 
-async function getRank({ sort = 'changePct', order = 'desc', count = 20 } = {}) {
+const RANK_SORTS = new Set(['changePct', 'amount', 'volume', 'speed', 'volumeRatio', 'amplitude']);
+const RANK_BOARDS = new Set(['all', 'cyb', 'kcb']);
+
+async function getRank({ board = 'all', sort = 'changePct', order = 'desc', count = 20 } = {}) {
+  // 与真实数据源一致：只接受已知的排序字段与板块
+  if (!RANK_SORTS.has(sort)) throw new NotSupportedError(`不支持的排序字段 ${sort}`);
+  if (!RANK_BOARDS.has(board)) throw new NotSupportedError(`不支持的板块 ${board}`);
   const items = UNIVERSE.filter((u) => marketOf(u.symbol) === 'cn' && u.type !== 'index').map((u) => {
     const q = quoteOf(u.symbol);
     return {
@@ -298,9 +304,9 @@ async function getRank({ sort = 'changePct', order = 'desc', count = 20 } = {}) 
       floatMarketCap: q.floatMarketCap,
     };
   });
-  const key = sort in items[0] ? sort : 'changePct';
-  items.sort((a, b) => (order === 'asc' ? a[key] - b[key] : b[key] - a[key]));
-  return { board: 'all', sort, order, offset: 0, total: items.length, items: items.slice(0, count) };
+  items.sort((a, b) => (order === 'asc' ? a[sort] - b[sort] : b[sort] - a[sort]));
+  const n = Math.min(100, Math.max(1, count | 0));
+  return { board, sort, order, offset: 0, total: items.length, items: items.slice(0, n) };
 }
 
 const rand01 = (s) => rng(hash(s) ^ Math.floor(Date.now() / 5000))();

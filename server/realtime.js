@@ -15,6 +15,10 @@
  *   S→C {type:'market', data}
  *   S→C {type:'upstream', ok, message?}
  *   S→C {type:'pong', t, serverTime}
+ *   S→C {type:'error', message}
+ *
+ * 防滥用：只接受同源（或 ALLOWED_ORIGINS 中）页面的连接；限制单 IP 连接数、单连接消息频率、
+ * 全局订阅代码总数；新订阅的即时拉取合并成批，同一时刻最多一批在途。
  */
 import { WebSocketServer } from 'ws';
 import { marketOf, normalizeSymbol } from '../shared/symbols.js';
@@ -22,6 +26,39 @@ import { logger } from './lib/logger.js';
 
 const UNKNOWN_TTL_MS = 10 * 60_000;
 const MAX_BUFFERED = 1 << 20; // 客户端积压超过 1MB 时跳过本轮推送，避免慢客户端拖垮服务
+const SNAPSHOT_DELAY_MS = 60; // 新订阅的即时拉取合并窗口
+// 单连接消息限速（令牌桶）：平均每秒 4 条、突发 40 条；持续超限的连接会被断开
+const MSG_BURST = 40;
+const MSG_PER_SEC = 4;
+const MAX_VIOLATIONS = 50;
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+/** 客户端 IP：经本机反向代理转发时取代理记录的地址（与 Express 的 trust proxy 'loopback' 一致） */
+export function clientIp(req) {
+  const remote = req.socket?.remoteAddress ?? 'unknown';
+  if (!LOOPBACK.has(remote)) return remote;
+  const forwarded = String(req.headers['x-forwarded-for'] ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return forwarded.at(-1) ?? remote;
+}
+
+/** 浏览器发起的 WebSocket 连接必须来自同源页面或白名单；不带 Origin 的（脚本、命令行工具）放行 */
+export function isAllowedOrigin(req, allowedOrigins = []) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  let url;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (allowedOrigins.includes(url.origin)) return true;
+  const viaProxy = LOOPBACK.has(req.socket?.remoteAddress) && req.headers['x-forwarded-host'];
+  const host = String(viaProxy || req.headers.host || '').split(',')[0].trim().toLowerCase();
+  return Boolean(host) && url.host.toLowerCase() === host;
+}
 
 function signature(q) {
   return [
@@ -38,13 +75,18 @@ function signature(q) {
 export class QuoteHub {
   constructor({ provider, config }) {
     this.provider = provider;
-    this.config = config;
+    this.config = { maxTotalSymbols: 3000, maxConnectionsPerIp: 20, allowedOrigins: [], ...config };
     this.clients = new Map(); // ws -> { id, symbols:Set, alive }
     this.refs = new Map(); // symbol -> 订阅计数
     this.quotes = new Map(); // symbol -> 最新报价
     this.sigs = new Map();
     this.lastFetch = new Map();
     this.unknown = new Map(); // symbol -> 标记时间；过期后会重新尝试（应对上游偶发缺数据）
+    this.ipConnections = new Map(); // ip -> 当前连接数
+    this.pendingFetch = new Set(); // 等待即时拉取的新订阅代码
+    this.pendingTargets = new Set(); // 等待快照的连接
+    this.flushTimer = null;
+    this.flushing = null;
     this.market = null;
     this.failures = 0;
     this.upstreamOk = true;
@@ -55,7 +97,22 @@ export class QuoteHub {
   }
 
   attach(server) {
-    this.wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
+    this.wss = new WebSocketServer({
+      server,
+      path: '/ws',
+      maxPayload: 64 * 1024,
+      verifyClient: (info, done) => {
+        if (!isAllowedOrigin(info.req, this.config.allowedOrigins)) {
+          logger.warn(`拒绝跨域 WebSocket 连接：${info.req.headers.origin}`);
+          return done(false, 403, 'Forbidden');
+        }
+        const ip = clientIp(info.req);
+        if ((this.ipConnections.get(ip) ?? 0) >= this.config.maxConnectionsPerIp) {
+          return done(false, 429, 'Too Many Connections');
+        }
+        return done(true);
+      },
+    });
     this.wss.on('connection', (ws, req) => this.onConnection(ws, req));
     return this;
   }
@@ -74,6 +131,7 @@ export class QuoteHub {
     this.timers.forEach(clearInterval);
     this.timers = [];
     clearTimeout(this.tickTimer);
+    clearTimeout(this.flushTimer);
     for (const ws of this.clients.keys()) ws.close(1001, 'server shutdown');
     this.wss?.close();
   }
@@ -92,8 +150,10 @@ export class QuoteHub {
   /* ---------------------------------------------------------------- clients */
 
   onConnection(ws, req) {
-    const client = { id: this.nextId++, symbols: new Set(), alive: true, ip: req.socket.remoteAddress };
+    const ip = clientIp(req);
+    const client = { id: this.nextId++, symbols: new Set(), alive: true, ip, tokens: MSG_BURST, refilledAt: Date.now(), violations: 0 };
     this.clients.set(ws, client);
+    this.ipConnections.set(ip, (this.ipConnections.get(ip) ?? 0) + 1);
     logger.debug(`ws#${client.id} connected from ${client.ip}`);
 
     ws.on('pong', () => {
@@ -101,6 +161,7 @@ export class QuoteHub {
     });
     ws.on('message', (raw, isBinary) => {
       if (isBinary) return;
+      if (!this.allowMessage(ws, client)) return;
       let msg;
       try {
         msg = JSON.parse(raw.toString());
@@ -112,6 +173,10 @@ export class QuoteHub {
     ws.on('close', () => {
       this.updateSubscriptions(client, new Set());
       this.clients.delete(ws);
+      this.pendingTargets.delete(ws);
+      const n = (this.ipConnections.get(ip) ?? 1) - 1;
+      if (n > 0) this.ipConnections.set(ip, n);
+      else this.ipConnections.delete(ip);
       logger.debug(`ws#${client.id} closed`);
     });
     ws.on('error', (err) => logger.warn(`ws#${client.id} error: ${err.message}`));
@@ -127,10 +192,28 @@ export class QuoteHub {
     });
   }
 
+  /** 令牌桶限速：超限的消息直接丢弃，持续超限则断开连接 */
+  allowMessage(ws, client) {
+    const now = Date.now();
+    client.tokens = Math.min(MSG_BURST, client.tokens + ((now - client.refilledAt) / 1000) * MSG_PER_SEC);
+    client.refilledAt = now;
+    if (client.tokens >= 1) {
+      client.tokens -= 1;
+      return true;
+    }
+    client.violations += 1;
+    if (client.violations === 1) this.send(ws, { type: 'error', message: '消息过于频繁，部分请求已被忽略' });
+    if (client.violations > MAX_VIOLATIONS) {
+      logger.warn(`ws#${client.id} (${client.ip}) 消息过于频繁，已断开`);
+      ws.close(1008, 'rate limit');
+    }
+    return false;
+  }
+
   onMessage(ws, client, msg) {
     switch (msg?.type) {
       case 'ping':
-        return this.send(ws, { type: 'pong', t: msg.t, serverTime: Date.now() });
+        return this.send(ws, { type: 'pong', t: Number.isFinite(msg.t) ? msg.t : null, serverTime: Date.now() });
       case 'set':
         return this.applySubscription(ws, client, new Set(this.cleanSymbols(msg.symbols)));
       case 'subscribe': {
@@ -144,7 +227,7 @@ export class QuoteHub {
         return this.applySubscription(ws, client, next);
       }
       default:
-        return this.send(ws, { type: 'error', message: `未知消息类型 ${msg?.type}` });
+        return this.send(ws, { type: 'error', message: `未知消息类型 ${String(msg?.type).slice(0, 32)}` });
     }
   }
 
@@ -169,7 +252,16 @@ export class QuoteHub {
     return out;
   }
 
-  applySubscription(ws, client, next) {
+  applySubscription(ws, client, requested) {
+    // 全局订阅总数达到上限时，不再接受此前没有任何人订阅的新代码
+    let next = requested;
+    const fresh = [...requested].filter((s) => !client.symbols.has(s) && !this.refs.has(s));
+    const room = Math.max(0, this.config.maxTotalSymbols - this.refs.size);
+    if (fresh.length > room) {
+      const rejected = new Set(fresh.slice(room));
+      next = new Set([...requested].filter((s) => !rejected.has(s)));
+      this.send(ws, { type: 'error', message: '服务器订阅数量已达上限，部分代码暂时无法实时更新' });
+    }
     const added = [...next].filter((s) => !client.symbols.has(s));
     this.updateSubscriptions(client, next);
 
@@ -180,7 +272,31 @@ export class QuoteHub {
     const unknown = added.filter((s) => this.isUnknown(s));
     if (unknown.length) this.send(ws, { type: 'unknown', symbols: unknown });
     const toFetch = missing.filter((s) => !this.isUnknown(s));
-    if (toFetch.length) this.fetchAndDispatch(toFetch, { snapshotFor: ws });
+    if (toFetch.length) this.queueSnapshot(ws, toFetch);
+  }
+
+  /** 新订阅的代码合并成批即时拉取（同一时刻最多一批在途），避免逐条消息直接打到上游 */
+  queueSnapshot(ws, symbols) {
+    symbols.forEach((s) => this.pendingFetch.add(s));
+    this.pendingTargets.add(ws);
+    if (!this.flushTimer) this.flushTimer = setTimeout(() => this.flushSnapshots(), SNAPSHOT_DELAY_MS);
+  }
+
+  async flushSnapshots() {
+    this.flushTimer = null;
+    if (this.flushing) {
+      await this.flushing;
+      if (this.flushTimer || !this.pendingFetch.size) return;
+    }
+    const symbols = [...this.pendingFetch].filter((s) => this.refs.has(s) && !this.quotes.has(s));
+    const targets = new Set(this.pendingTargets);
+    this.pendingFetch.clear();
+    this.pendingTargets.clear();
+    if (!symbols.length || this.stopped) return;
+    this.flushing = this.fetchAndDispatch(symbols, { snapshotFor: targets }).finally(() => {
+      this.flushing = null;
+    });
+    await this.flushing;
   }
 
   updateSubscriptions(client, next) {
@@ -291,7 +407,7 @@ export class QuoteHub {
     const changed = new Map();
     const newlyUnknown = [];
     for (const sym of symbols) {
-      this.lastFetch.set(sym, started);
+      if (this.refs.has(sym)) this.lastFetch.set(sym, started);
       const q = quotes.get(sym);
       if (!q) {
         if (!this.isUnknown(sym)) newlyUnknown.push(sym);
@@ -311,7 +427,7 @@ export class QuoteHub {
 
     const requested = new Set(symbols);
     for (const [ws, client] of this.clients) {
-      const isSnapshotTarget = ws === snapshotFor;
+      const isSnapshotTarget = Boolean(snapshotFor?.has(ws));
       const data = [];
       for (const sym of client.symbols) {
         const q = changed.get(sym) ?? (isSnapshotTarget && requested.has(sym) ? this.quotes.get(sym) : undefined);

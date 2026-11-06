@@ -44,6 +44,36 @@ export function initTicker({ onPick }) {
   });
   store.on('select', markActive);
   markActive(store.selected);
+  initScrollHints(root);
+}
+
+/**
+ * 指数条放不下时可以横向滚动：边缘渐隐提示还有内容；
+ * 鼠标滚轮（纵向）也能横向滚动，桌面端不必按住 Shift。
+ */
+function initScrollHints(root) {
+  const update = () => {
+    const max = root.scrollWidth - root.clientWidth;
+    root.classList.toggle('fade-left', root.scrollLeft > 2);
+    root.classList.toggle('fade-right', root.scrollLeft < max - 2);
+  };
+  root.addEventListener('scroll', update, { passive: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(update).observe(root);
+  else window.addEventListener('resize', update);
+  root.addEventListener(
+    'wheel',
+    (e) => {
+      if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // 触控板横向滑动 / 缩放手势交给浏览器
+      const max = root.scrollWidth - root.clientWidth;
+      if (max <= 0) return;
+      const atEdge = (e.deltaY < 0 && root.scrollLeft <= 0) || (e.deltaY > 0 && root.scrollLeft >= max - 1);
+      if (atEdge) return; // 到头了就让页面正常滚动
+      e.preventDefault();
+      root.scrollLeft += e.deltaY;
+    },
+    { passive: false },
+  );
+  update();
 }
 
 function markActive(symbol) {

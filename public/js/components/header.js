@@ -1,4 +1,4 @@
-import { $, icons } from '../dom.js';
+import { $, h, icons } from '../dom.js';
 import { store } from '../store.js';
 import { THEME_COLOR, THEME_LABEL, nextThemeMode, normalizeThemeMode, resolveTheme } from '../theme.js';
 import { toast } from './toast.js';
@@ -9,17 +9,22 @@ const MARKETS = [
   ['us', '美股'],
 ];
 
+/** 市场状态文字来自上游接口，只以文本方式插入页面 */
 export function renderMarketStatus(status) {
   const el = $('#market-status');
-  el.innerHTML = '';
-  for (const [key, label] of MARKETS) {
-    const s = status?.[key];
-    const chip = document.createElement('span');
-    chip.className = `mkt${s?.open ? ' open' : ''}`;
-    chip.title = s ? `${label}：${s.text}` : `${label}：状态未知`;
-    chip.innerHTML = `<span class="mkt-dot"></span><b>${label}</b>${s ? s.text : '--'}`;
-    el.append(chip);
-  }
+  el.replaceChildren(
+    ...MARKETS.map(([key, label]) => {
+      const s = status?.[key];
+      const text = s && typeof s.text === 'string' ? s.text : '';
+      return h(
+        'span',
+        { class: `mkt${s?.open ? ' open' : ''}`, title: s ? `${label}：${text}` : `${label}：状态未知` },
+        h('span', { class: 'mkt-dot' }),
+        h('b', {}, label),
+        s ? text : '--',
+      );
+    }),
+  );
 }
 
 const CONN_TEXT = {

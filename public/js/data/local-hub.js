@@ -164,7 +164,7 @@ export class LocalRealtime {
     const changed = [];
     const unknown = [];
     for (const s of symbols) {
-      this.lastFetch.set(s, started);
+      if (this.symbols.has(s)) this.lastFetch.set(s, started); // 拉取期间被取消订阅的不再记录
       const q = quotes.get(s);
       if (!q) {
         if (!this.isUnknown(s)) unknown.push(s);

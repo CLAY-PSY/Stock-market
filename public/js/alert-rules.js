@@ -7,19 +7,22 @@ export const ALERT_TYPES = {
   pctBelow: { label: '跌幅 ≥', unit: 'pct' },
 };
 
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
 export function evaluateAlert(alert, quote) {
   if (!alert?.active || !quote || quote.noTrade) return false;
   const v = Number(alert.value);
   if (!Number.isFinite(v)) return false;
+  // 缺少价格 / 涨跌幅时不判断（null <= 10 在 JS 里为 true，会误触发）
   switch (alert.type) {
     case 'priceAbove':
-      return quote.price >= v;
+      return isNum(quote.price) && quote.price >= v;
     case 'priceBelow':
-      return quote.price <= v;
+      return isNum(quote.price) && quote.price <= v;
     case 'pctAbove':
-      return quote.changePct >= v;
+      return isNum(quote.changePct) && quote.changePct >= v;
     case 'pctBelow':
-      return quote.changePct <= -Math.abs(v);
+      return isNum(quote.changePct) && quote.changePct <= -Math.abs(v);
     default:
       return false;
   }

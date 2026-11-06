@@ -3,6 +3,12 @@
  * 组件通过 store.on(event, fn) 订阅变化，避免互相直接依赖。
  */
 import { migrateSettings, SETTINGS_VERSION } from './theme.js';
+import { createStateSanitizer, MAX_WATCHLIST, MAX_ALERTS } from './data/saved-state.js';
+import { normalizeSymbol } from '../shared/symbols.js';
+
+const { sanitizeSaved } = createStateSanitizer(normalizeSymbol);
+
+export { MAX_WATCHLIST, MAX_ALERTS };
 
 const STORAGE_KEY = 'stockpulse:v1';
 
@@ -54,22 +60,23 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
-    return null;
+    return null; // 隐私模式下不可用，或内容已损坏
   }
 }
 
 class Store {
   constructor() {
-    const saved = load() ?? {};
+    // 本地保存的内容可能已损坏或被改动：逐项校验，不合法的回落到默认值
+    const saved = sanitizeSaved(load());
     // 先迁移已保存的设置再合并默认值（否则默认值里的版本号会掩盖旧设置）
     const savedSettings = saved.settings ? migrateSettings(saved.settings) : {};
     this.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
     if (saved.settings && saved.settings.settingsVersion !== SETTINGS_VERSION) this.persist();
-    this.watchlist = Array.isArray(saved.watchlist) ? saved.watchlist.filter((s) => typeof s === 'string') : [...DEFAULT_WATCHLIST];
-    this.alerts = Array.isArray(saved.alerts) ? saved.alerts : [];
-    this.selected = typeof saved.selected === 'string' ? saved.selected : this.watchlist[0] ?? 'sh600519';
+    this.watchlist = saved.watchlist ?? [...DEFAULT_WATCHLIST];
+    this.alerts = saved.alerts;
+    this.selected = saved.selected ?? this.watchlist[0] ?? 'sh600519';
     this.quotes = new Map();
-    this.names = new Map(Object.entries(saved.names ?? {})); // 代码 → 名称缓存，报价到达前用于展示
+    this.names = new Map(Object.entries(saved.names)); // 代码 → 名称缓存，报价到达前用于展示
     this.unknown = new Set();
     this.market = null;
     this.provider = null;
@@ -94,19 +101,25 @@ class Store {
 
   persist() {
     clearTimeout(this.persistTimer);
-    this.persistTimer = setTimeout(() => {
-      try {
-        const names = Object.fromEntries(
-          [...this.names].filter(([s]) => this.watchlist.includes(s) || this.alerts.some((a) => a.symbol === s) || s === this.selected),
-        );
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ settings: this.settings, watchlist: this.watchlist, alerts: this.alerts, selected: this.selected, names }),
-        );
-      } catch {
-        /* 隐私模式或存储已满时忽略 */
-      }
-    }, 200);
+    this.persistTimer = setTimeout(() => this.flush(), 200);
+  }
+
+  /** 立即写入（页面隐藏 / 关闭前调用，避免 200ms 防抖期间的改动丢失） */
+  flush() {
+    if (this.persistTimer == null) return; // 没有待写入的改动
+    clearTimeout(this.persistTimer);
+    this.persistTimer = null;
+    try {
+      const names = Object.fromEntries(
+        [...this.names].filter(([s]) => this.watchlist.includes(s) || this.alerts.some((a) => a.symbol === s) || s === this.selected),
+      );
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ settings: this.settings, watchlist: this.watchlist, alerts: this.alerts, selected: this.selected, names }),
+      );
+    } catch {
+      /* 隐私模式或存储已满时忽略 */
+    }
   }
 
   /* ---------------------------------------------------------------- quotes */
@@ -153,9 +166,11 @@ class Store {
     return this.watchlist.includes(symbol);
   }
 
+  /** @returns true 已加入；false 已在自选中；'full' 自选数量已达上限 */
   addToWatchlist(symbol, name) {
     if (name) this.names.set(symbol, name);
     if (this.inWatchlist(symbol)) return false;
+    if (this.watchlist.length >= MAX_WATCHLIST) return 'full';
     this.watchlist = [...this.watchlist, symbol];
     this.persist();
     this.emit('watchlist', this.watchlist);
@@ -184,7 +199,9 @@ class Store {
 
   /* ----------------------------------------------------------------- alerts */
 
+  /** @returns 新建的提醒；数量已达上限时返回 null */
   addAlert(alert) {
+    if (this.alerts.length >= MAX_ALERTS) return null;
     const item = {
       id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
       createdAt: Date.now(),
@@ -225,3 +242,11 @@ class Store {
 }
 
 export const store = new Store();
+
+// 页面切到后台 / 关闭前把尚未写入的改动立即保存（手机上切走后页面可能直接被系统回收）
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => store.flush());
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) store.flush();
+  });
+}

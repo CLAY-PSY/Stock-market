@@ -1,10 +1,17 @@
 import { $, h, icons } from '../dom.js';
 import { api } from '../api.js';
-import { store } from '../store.js';
+import { store, MAX_WATCHLIST } from '../store.js';
 import { exchangeTag, displayCode, escapeHtml } from '../format.js';
+import { normalizeSymbol } from '../../shared/symbols.js';
 import { toast } from './toast.js';
 
 const TYPE_LABEL = { stock: '股票', index: '指数', fund: '基金', bond: '债券' };
+
+/** 搜索没有结果、但输入本身是合法代码时（例如 BRK.B），提供「按代码打开」 */
+function directItem(text) {
+  const symbol = normalizeSymbol(text);
+  return symbol ? { symbol, name: displayCode(symbol), type: null, direct: true } : null;
+}
 
 /**
  * 搜索框 + 「键盘精灵」：在页面任意位置直接输入代码/拼音即可唤起搜索。
@@ -70,7 +77,7 @@ export function initSearch({ onPick, sheet }) {
 
   const pick = (item) => {
     if (!item) return;
-    store.names.set(item.symbol, item.name);
+    if (!item.direct) store.names.set(item.symbol, item.name);
     onPick(item.symbol);
     input.value = '';
     input.blur();
@@ -97,9 +104,9 @@ export function initSearch({ onPick, sheet }) {
       add.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (store.addToWatchlist(item.symbol, item.name)) {
-          toast(`已将 ${item.name} 加入自选`, { kind: 'success', duration: 2000 });
-        }
+        const added = store.addToWatchlist(item.symbol, item.direct ? undefined : item.name);
+        if (added === 'full') toast(`自选股最多 ${MAX_WATCHLIST} 只，请先移除一些`, { kind: 'warn', duration: 3000 });
+        else if (added) toast(`已将 ${item.name} 加入自选`, { kind: 'success', duration: 2000 });
         render();
         highlight(i);
       });
@@ -108,7 +115,7 @@ export function initSearch({ onPick, sheet }) {
         { role: 'option', 'aria-selected': String(i === active), id: `sr-${i}` },
         h('span', { class: `tag tag-${exchangeTag(item.symbol)}` }, exchangeTag(item.symbol)),
         h('span', { html: `<span class="sr-name">${escapeHtml(item.name)}</span><span class="sr-code">${escapeHtml(displayCode(item.symbol))}</span>` }),
-        h('span', { class: 'sr-type' }, TYPE_LABEL[item.type] ?? ''),
+        h('span', { class: 'sr-type' }, item.direct ? '按代码打开' : TYPE_LABEL[item.type] ?? ''),
         add,
       );
       li.addEventListener('mousedown', (e) => {
@@ -134,7 +141,8 @@ export function initSearch({ onPick, sheet }) {
     try {
       const res = await api.search(text, { signal: ctrl.signal });
       if (text !== input.value.trim()) return;
-      items = res.data ?? [];
+      items = Array.isArray(res.data) ? res.data : [];
+      if (!items.length) items = [directItem(text)].filter(Boolean);
       active = -1;
       render();
     } catch (err) {
