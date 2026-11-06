@@ -32,12 +32,12 @@ test('备用股票池里的代码都是规范的内部代码，且不重复', ()
   }
 });
 
-test('有实时数据时从实时活跃股中挑选：13 只、不重复、按 A 股 → 港股 → 美股排列', () => {
+test('有实时数据时从实时活跃股中挑选：20 只、不重复、按 A 股 → 港股 → 美股排列', () => {
   const { symbols, names, sources } = pickDefaultWatchlist(live, seeded(1));
   assert.deepEqual(sources, { cn: 'live', hk: 'live', us: 'live' });
-  assert.equal(symbols.length, 13);
-  assert.equal(new Set(symbols).size, 13);
-  assert.deepEqual(symbols.map(marketOf), ['cn', 'cn', 'cn', 'cn', 'cn', 'cn', 'hk', 'hk', 'hk', 'us', 'us', 'us', 'us']);
+  assert.equal(symbols.length, 20);
+  assert.equal(new Set(symbols).size, 20);
+  assert.deepEqual(symbols.map(marketOf), [...Array(10).fill('cn'), ...Array(5).fill('hk'), ...Array(5).fill('us')]);
   const liveSet = new Set(Object.values(live).flat().map((c) => c.symbol));
   assert.ok(symbols.every((s) => liveSet.has(s)), '全部来自实时列表');
   for (const s of symbols) assert.match(names[s], /^(A股|港股|美股)\d+$/);
@@ -48,11 +48,11 @@ test('某个市场取不到或数量太少时，只有这个市场改用备用�
   assert.deepEqual(sources, { cn: 'live', hk: 'pool', us: 'pool' });
   const pool = new Set(Object.values(WATCHLIST_POOL).flat().map(([s]) => s));
   assert.ok(symbols.filter((s) => marketOf(s) !== 'cn').every((s) => pool.has(s)));
-  assert.equal(symbols.length, 13);
+  assert.equal(symbols.length, 20);
 
   const offline = pickDefaultWatchlist({}, seeded(3));
   assert.deepEqual(offline.sources, { cn: 'pool', hk: 'pool', us: 'pool' });
-  assert.equal(offline.symbols.length, 13, '全部取不到时也能给出完整的默认自选');
+  assert.equal(offline.symbols.length, 20, '全部取不到时也能给出完整的默认自选');
 });
 
 test('不同的随机数得到不同的组合；同一随机序列结果相同', () => {
