@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark" data-updown="cn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="StockPulse 实时行情：A 股、港股、美股实时报价、分时与 K 线、五档盘口、逐笔成交、市场排行、自选股与价格提醒。" />
+    <title>StockPulse · 实时行情</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/boot.js"></script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="StockPulse 首页">
+          <span class="brand-logo" data-icon="logo"></span>
+          <span class="brand-name">StockPulse</span>
+          <span class="brand-sub">实时行情</span>
+        </a>
+
+        <div class="search" id="search">
+          <span class="search-icon" data-icon="search"></span>
+          <input
+            id="search-input"
+            type="search"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="代码 / 名称 / 拼音，如 600519、腾讯、AAPL"
+            role="combobox"
+            aria-expanded="false"
+            aria-controls="search-results"
+            aria-autocomplete="list"
+          />
+          <kbd class="search-kbd" title="按 / 或直接键入代码即可搜索">/</kbd>
+          <ul id="search-results" class="search-results" role="listbox" hidden></ul>
+        </div>
+
+        <div class="market-status" id="market-status" aria-label="市场状态"></div>
+
+        <div class="topbar-actions">
+          <div class="conn" id="conn" role="status" aria-live="polite">
+            <span class="conn-dot"></span><span class="conn-label">连接中</span>
+          </div>
+          <div class="clock" id="clock" title=""></div>
+          <button class="icon-btn" id="btn-alerts" type="button" title="价格提醒" aria-label="价格提醒">
+            <span data-icon="bell"></span><span class="badge" id="alerts-badge" hidden></span>
+          </button>
+          <button class="text-btn" id="btn-updown" type="button" title="切换涨跌颜色"></button>
+          <button class="icon-btn" id="btn-theme" type="button" title="切换深色 / 浅色主题" aria-label="切换主题"></button>
+        </div>
+      </header>
+
+      <div class="banner" id="banner" role="alert" hidden></div>
+
+      <nav class="ticker" id="ticker" aria-label="主要指数"></nav>
+
+      <main class="layout">
+        <aside class="col col-left">
+          <section class="panel panel-watchlist">
+            <div class="panel-head">
+              <h2>自选股 <span class="count" id="wl-count"></span></h2>
+              <div class="seg" id="wl-filter" role="tablist" aria-label="按市场筛选">
+                <button type="button" data-v="all">全部</button>
+                <button type="button" data-v="cn">沪深</button>
+                <button type="button" data-v="hk">港股</button>
+                <button type="button" data-v="us">美股</button>
+              </div>
+            </div>
+            <div class="wl-head" id="wl-head">
+              <button type="button" data-sort="name">名称</button>
+              <button type="button" data-sort="price">最新价</button>
+              <button type="button" data-sort="changePct">涨跌幅</button>
+            </div>
+            <ul class="wl-list" id="watchlist" role="listbox" aria-label="自选股列表"></ul>
+          </section>
+
+          <section class="panel panel-rank">
+            <div class="panel-head">
+              <h2>沪深排行</h2>
+              <select id="rank-board" aria-label="板块">
+                <option value="all">全部 A 股</option>
+                <option value="cyb">创业板</option>
+                <option value="kcb">科创板</option>
+              </select>
+            </div>
+            <div class="tabs tabs-sm" id="rank-tabs" role="tablist">
+              <button type="button" data-v="changePct:desc">涨幅</button>
+              <button type="button" data-v="changePct:asc">跌幅</button>
+              <button type="button" data-v="amount:desc">成交额</button>
+              <button type="button" data-v="speed:desc">涨速</button>
+              <button type="button" data-v="volumeRatio:desc">量比</button>
+              <button type="button" data-v="amplitude:desc">振幅</button>
+            </div>
+            <ol class="rank-list" id="rank-list"></ol>
+          </section>
+        </aside>
+
+        <section class="col col-main">
+          <section class="panel panel-quote" id="quote"></section>
+
+          <section class="panel panel-chart">
+            <div class="chart-toolbar">
+              <div class="tabs" id="period-tabs" role="tablist" aria-label="周期">
+                <button type="button" data-v="minute">分时</button>
+                <button type="button" data-v="minute5">五日</button>
+                <button type="button" data-v="day">日K</button>
+                <button type="button" data-v="week">周K</button>
+                <button type="button" data-v="month">月K</button>
+                <span class="tabs-sep"></span>
+                <button type="button" data-v="m1">1分</button>
+                <button type="button" data-v="m5">5分</button>
+                <button type="button" data-v="m15">15分</button>
+                <button type="button" data-v="m30">30分</button>
+                <button type="button" data-v="m60">60分</button>
+              </div>
+              <div class="chart-opts" id="chart-opts">
+                <label class="select-wrap" title="复权方式">
+                  <select id="adjust" aria-label="复权方式">
+                    <option value="qfq">前复权</option>
+                    <option value="">不复权</option>
+                    <option value="hfq">后复权</option>
+                  </select>
+                </label>
+                <div class="seg seg-sm" id="main-ind" aria-label="主图指标">
+                  <button type="button" data-v="MA">MA</button>
+                  <button type="button" data-v="BOLL">BOLL</button>
+                  <button type="button" data-v="NONE">无</button>
+                </div>
+                <div class="seg seg-sm" id="sub-ind" aria-label="副图指标">
+                  <button type="button" data-v="MACD">MACD</button>
+                  <button type="button" data-v="KDJ">KDJ</button>
+                  <button type="button" data-v="RSI">RSI</button>
+                  <button type="button" data-v="NONE">无</button>
+                </div>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart" id="chart"></div>
+              <div class="chart-overlay" id="chart-overlay" hidden></div>
+            </div>
+          </section>
+        </section>
+
+        <aside class="col col-right">
+          <section class="panel panel-book">
+            <div class="panel-head"><h2>盘口</h2><span class="hint" id="book-hint"></span></div>
+            <div class="book" id="orderbook"></div>
+          </section>
+          <section class="panel panel-ticks">
+            <div class="panel-head"><h2>成交明细</h2><span class="hint" id="ticks-hint"></span></div>
+            <div class="ticks-head"><span>时间</span><span>价格</span><span>成交量</span></div>
+            <ol class="ticks" id="ticks"></ol>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="footer">
+        <span>数据来源：<span id="provider-label">腾讯财经</span>公开行情，仅供参考，不构成投资建议。港股为实时行情，美股行情可能存在延迟。</span>
+        <span class="footer-right">
+          图表由 <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts™</a> 提供
+          · 快捷键：<kbd>/</kbd> 搜索 <kbd>↑</kbd><kbd>↓</kbd> 切换自选 <kbd>Esc</kbd> 关闭
+        </span>
+      </footer>
+    </div>
+
+    <!-- 价格提醒列表 -->
+    <aside class="drawer" id="alerts-drawer" aria-label="价格提醒" hidden>
+      <div class="drawer-head">
+        <h2>价格提醒</h2>
+        <button class="icon-btn" type="button" data-close aria-label="关闭" data-icon="close"></button>
+      </div>
+      <p class="drawer-note">提醒在本页面打开期间生效；允许浏览器通知后，页面在后台也会弹出系统通知。</p>
+      <div class="drawer-actions">
+        <button class="btn btn-primary" type="button" id="btn-new-alert">新建提醒</button>
+        <label class="check"><input type="checkbox" id="alert-sound" /> 提示音</label>
+      </div>
+      <ul class="alert-list" id="alert-list"></ul>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <!-- 新建提醒 -->
+    <dialog class="dialog" id="alert-dialog" aria-labelledby="alert-dialog-title">
+      <form method="dialog" id="alert-form" novalidate>
+        <h2 id="alert-dialog-title">新建价格提醒</h2>
+        <div class="field">
+          <span class="field-label">股票</span>
+          <div class="field-static" id="alert-symbol"></div>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">条件</span>
+            <select name="type" id="alert-type">
+              <option value="priceAbove">价格 ≥</option>
+              <option value="priceBelow">价格 ≤</option>
+              <option value="pctAbove">涨幅 ≥ (%)</option>
+              <option value="pctBelow">跌幅 ≥ (%)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">数值</span>
+            <input name="value" id="alert-value" type="number" step="any" inputmode="decimal" required />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field-label">备注（可选）</span>
+          <input name="note" id="alert-note" type="text" maxlength="40" placeholder="例如：突破前高" />
+        </label>
+        <p class="field-help" id="alert-help"></p>
+        <p class="field-error" id="alert-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="btn" type="button" value="cancel" data-close>取消</button>
+          <button class="btn btn-primary" type="submit" value="ok">创建提醒</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <script type="module" src="/js/main.js"></script>
+  </body>
+</html>
