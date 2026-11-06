@@ -1548,7 +1548,169 @@ svg {
   scrollbar-color: var(--border-strong) transparent;
 }
 
-/* -------------------------------------------------------------- responsive */
+/* -------------------------------------------------------------- touch & compat */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a,
+select,
+.wl-item,
+.rank-item,
+.tk {
+  touch-action: manipulation;
+}
+
+/* 仅窄屏 / 仅宽屏显示的元素 */
+@media (min-width: 900px) {
+  .mobile-only,
+  .tabbar,
+  .search-cancel {
+    display: none !important;
+  }
+}
+@media (max-width: 899px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* 没有悬停能力的设备（手机、平板）：隐藏只能靠悬停出现的按钮，用「编辑」模式代替 */
+@media (hover: none) {
+  .wl-remove {
+    display: none !important;
+  }
+}
+
+/* 粗指针（触屏）设备加大点击区域 */
+.touch .tabs button {
+  padding: 7px 11px;
+}
+.touch .seg button {
+  padding: 4px 10px;
+}
+.touch .seg-sm button {
+  padding: 4px 9px;
+}
+.touch .wl-head button {
+  padding: 4px 0;
+}
+.touch .icon-btn {
+  min-width: 38px;
+  height: 38px;
+}
+
+/* 不支持 color-mix() 的旧浏览器（iOS 16.1 及以下）使用固定透明色 */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  :root,
+  :root[data-updown='cn'] {
+    --up-soft: rgba(224, 48, 58, 0.16);
+    --down-soft: rgba(15, 155, 88, 0.16);
+  }
+  :root[data-updown='intl'] {
+    --up-soft: rgba(15, 155, 88, 0.16);
+    --down-soft: rgba(224, 48, 58, 0.16);
+  }
+  .chart-overlay {
+    background: rgba(127, 127, 127, 0.18);
+  }
+}
+
+/* 动态视口高度：避免手机浏览器地址栏伸缩导致的 100vh 偏差 */
+@supports (height: 100dvh) {
+  .app {
+    height: 100dvh;
+  }
+}
+
+/* 编辑按钮、指标折叠、盘口切换等新增控件 */
+.link-btn {
+  margin-left: auto;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--accent);
+  border-radius: 4px;
+}
+.link-btn[aria-pressed='true'] {
+  font-weight: 600;
+}
+.panel-watchlist .panel-head {
+  flex-wrap: wrap;
+}
+
+.wl-list.editing .wl-item {
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  cursor: default;
+}
+.wl-list.editing .wl-price,
+.wl-list.editing .wl-chg {
+  display: none;
+}
+.wl-delete {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--red);
+  border-radius: 50%;
+}
+.wl-delete svg {
+  width: 22px;
+  height: 22px;
+}
+.wl-ops {
+  display: flex;
+  gap: 4px;
+}
+.wl-op {
+  width: 34px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+.wl-op:disabled {
+  opacity: 0.3;
+}
+.wl-op svg {
+  width: 16px;
+  height: 16px;
+}
+
+.q-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.side-tabs {
+  align-self: flex-start;
+}
+
+/* <dialog> 不支持 showModal 时的退化样式 */
+.dialog.dialog-fallback[open] {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  z-index: 95;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+}
+
+/* ------------------------------------------------------- responsive: tablet */
 
 /* 两栏：页面整体滚动，左栏吸顶；盘口与成交明细并排放在图表下方 */
 @media (max-width: 1280px) {
@@ -1593,70 +1755,524 @@ svg {
   }
 }
 
-@media (max-width: 860px) {
+/* ---------------------------------------------- responsive: phone & portrait */
+
+/*
+ * ≤ 899px：手机与平板竖屏使用「应用式」布局——
+ * 顶栏吸顶、底部导航切换视图（#app[data-view]）、页面整体滚动、适配刘海与底部横条安全区。
+ */
+@media (max-width: 899px) {
+  :root {
+    --topbar-h: 52px;
+    --tabbar-h: 56px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
+  .app {
+    height: auto;
+    min-height: 100vh;
+    padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+  }
+  @supports (height: 100dvh) {
+    .app {
+      height: auto;
+      min-height: 100dvh;
+    }
+  }
+  html.sheet-open,
+  html.sheet-open body {
+    overflow: hidden;
+  }
+
+  /* 顶栏 */
+  .topbar {
+    position: sticky;
+    top: 0;
+    height: calc(var(--topbar-h) + var(--safe-top));
+    padding: var(--safe-top) max(12px, var(--safe-right)) 0 max(12px, var(--safe-left));
+    gap: 6px;
+    z-index: 40;
+  }
+  .brand-sub,
+  .market-status,
+  .clock,
+  .conn-label,
+  #btn-alerts {
+    display: none;
+  }
+  .topbar-actions {
+    gap: 4px;
+  }
+  .text-btn {
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  /* 全屏搜索面板。它在顶栏内部，顶栏的层级决定了它能否盖住底部导航 */
+  html.search-open .topbar {
+    z-index: 100;
+  }
+  .search {
+    display: none;
+  }
+  .search.open {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    padding: calc(var(--safe-top) + 10px) max(12px, var(--safe-right)) var(--safe-bottom) max(12px, var(--safe-left));
+    background: var(--bg);
+  }
+  .search.open input {
+    order: 0;
+    height: 44px;
+    padding: 0 12px;
+    font-size: 16px; /* 小于 16px 时 iOS 聚焦会自动放大页面 */
+    margin-right: 64px;
+  }
+  .search.open .search-icon,
+  .search.open .search-kbd {
+    display: none;
+  }
+  .search-cancel {
+    display: none;
+  }
+  .search.open .search-cancel {
+    display: block;
+    position: absolute;
+    top: calc(var(--safe-top) + 10px);
+    right: max(12px, var(--safe-right));
+    height: 44px;
+    padding: 0 6px 0 12px;
+    font-size: 15px;
+    color: var(--accent);
+  }
+  .search.open .search-results {
+    position: static;
+    flex: 1;
+    margin-top: 10px;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .search.open .search-results[hidden] {
+    display: block;
+    visibility: hidden;
+  }
+  .search.open .search-results li {
+    padding: 12px 6px;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+  .search.open .search-results li[aria-selected='true'] {
+    background: transparent;
+  }
+  .search.open .sr-add {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* 指数条 */
+  .ticker {
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding-left: var(--safe-left);
+  }
+  .tk {
+    flex: 0 0 auto;
+    min-width: 116px;
+    padding: 6px 12px;
+    scroll-snap-align: start;
+  }
+
+  /* 主体：一次显示一个视图 */
+  .layout {
+    display: block;
+    padding: 8px max(8px, var(--safe-right)) 8px max(8px, var(--safe-left));
+  }
+  .col {
+    gap: 8px;
+  }
+  .col + .col {
+    margin-top: 8px;
+  }
   .col-left {
     position: static;
     height: auto;
   }
-  .topbar {
-    gap: 10px;
-    padding: 0 12px;
+  /* 桌面版面板用 flex: N 1 0 按比例分高度；手机上页面高度不固定，0 基准会把面板压成 0 高，必须按内容撑开 */
+  .col > .panel,
+  .col > .seg {
+    flex: none;
   }
-  .brand-sub,
-  .search-kbd,
-  .conn-label {
+  .app[data-view='watch'] .col-main,
+  .app[data-view='watch'] .col-right,
+  .app[data-view='watch'] .panel-rank,
+  .app[data-view='rank'] .col-main,
+  .app[data-view='rank'] .col-right,
+  .app[data-view='rank'] .panel-watchlist,
+  .app[data-view='quote'] .col-left {
     display: none;
   }
-  .layout {
+  .app[data-view='watch'] .ticker,
+  .app[data-view='rank'] .ticker {
     display: flex;
-    flex-direction: column;
   }
-  .col-main {
-    order: -1;
-  }
-  .panel-chart {
-    height: 460px;
-    min-height: 0;
-  }
-  .panel-ticks {
-    height: 360px;
-  }
-  .panel-watchlist .wl-list {
-    max-height: 420px;
-  }
+  .panel-watchlist .wl-list,
   .panel-rank .rank-list {
-    max-height: 360px;
+    max-height: none;
+    overflow: visible;
   }
+
+  /* 自选 / 排行列表：更大的行高便于点按 */
+  .wl-item {
+    padding: 11px 12px;
+  }
+  .wl-name b {
+    font-size: 15px;
+  }
+  .wl-price {
+    font-size: 15px;
+  }
+  .wl-chg {
+    min-width: 72px;
+    padding: 5px 6px;
+    font-size: 13px;
+  }
+  .wl-head button {
+    padding: 4px 0;
+  }
+  .rank-item {
+    padding: 10px 12px;
+  }
+
+  /* 报价面板 */
+  .panel-quote {
+    padding: 12px;
+  }
+  .q-top {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    align-items: end;
+  }
+  .q-ident {
+    grid-column: 1 / -1;
+  }
+  .q-name h1 {
+    font-size: 17px;
+  }
+  .q-price-block {
+    gap: 10px;
+  }
+  .q-price {
+    font-size: 30px;
+    padding: 0;
+  }
+  .q-change {
+    font-size: 13px;
+  }
+  .q-actions {
+    margin-left: 0;
+    gap: 6px;
+  }
+  .q-actions .btn {
+    height: 34px;
+    padding: 0 10px;
+  }
+  .q-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 18px;
+    margin-top: 10px;
+  }
+  .q-stats.collapsed > div:nth-child(n + 7) {
+    display: none;
+  }
+
+  /* 图表 */
+  .panel-chart {
+    flex: none;
+    height: min(62vh, 520px);
+    min-height: 340px;
+  }
+  .chart-toolbar {
+    flex-direction: column;
+    flex-wrap: nowrap; /* 换行的纵向 flex 容器会按最宽的子元素撑开，周期按钮就无法横向滚动 */
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .chart-toolbar > * {
+    min-width: 0;
+  }
+  #period-tabs,
+  .chart-opts {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  #period-tabs::-webkit-scrollbar,
+  .chart-opts::-webkit-scrollbar {
+    display: none;
+  }
+  #period-tabs button,
+  .chart-opts > * {
+    flex: none;
+  }
+  .chart-opts[data-mode='intraday'] {
+    display: none;
+  }
+  .chart-legend {
+    right: 50px;
+    font-size: 10px;
+  }
+  .lg-item b {
+    font-size: 10px;
+  }
+
+  /* 盘口 / 成交明细：切换显示 */
   .col-right {
     flex-direction: column;
   }
+  .col-right .panel {
+    flex: none;
+  }
+  #side[data-tab='book'] .panel-ticks,
+  #side[data-tab='ticks'] .panel-book {
+    display: none;
+  }
+  .panel-ticks {
+    height: auto;
+  }
+  .ticks {
+    overflow: visible;
+  }
+  .tick:nth-child(n + 31) {
+    display: none;
+  }
+  .book-row {
+    padding: 4px 0;
+    font-size: 13px;
+  }
+
+  /* 页脚：保留数据来源与图表库归属声明 */
   .footer {
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    padding: 10px max(12px, var(--safe-right)) 12px max(12px, var(--safe-left));
+    border-top: 0;
+    background: transparent;
   }
-  .footer-right {
+
+  /* 底部导航 */
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    display: flex;
+    height: calc(var(--tabbar-h) + var(--safe-bottom));
+    padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  @supports (backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px)) {
+    .tabbar {
+      background: color-mix(in srgb, var(--panel) 86%, transparent);
+      -webkit-backdrop-filter: saturate(160%) blur(14px);
+      backdrop-filter: saturate(160%) blur(14px);
+    }
+  }
+  .tabbar button {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .tabbar button [data-icon] {
+    display: flex;
+  }
+  .tabbar svg {
+    width: 22px;
+    height: 22px;
+  }
+  .tabbar button[aria-current='page'] {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .tabbar .badge {
+    top: 5px;
+    right: calc(50% - 22px);
+  }
+
+  /* 面板、弹窗、提示 */
+  /* 提醒面板作为一个「标签页」：盖住顶栏和内容，但留出底部导航，可以直接切到其它标签 */
+  .drawer {
+    width: 100vw;
+    bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    padding-top: var(--safe-top);
+    border-left: 0;
+    box-shadow: none;
+    z-index: 42;
+    animation: none;
+  }
+  .scrim {
+    z-index: 41;
+  }
+  .alert-item {
+    padding: 12px 16px;
+  }
+  .field input,
+  .field select {
+    height: 44px;
+    font-size: 16px;
+  }
+  .dialog form {
+    padding: 18px 16px 16px;
+  }
+  .toasts {
+    top: calc(var(--topbar-h) + var(--safe-top) + 8px);
+    left: max(12px, var(--safe-left));
+    right: max(12px, var(--safe-right));
+    width: auto;
+  }
+}
+
+/* 平板竖屏（600–899px）：盘口和成交明细并排，指标显示更多 */
+@media (min-width: 600px) and (max-width: 899px) {
+  .side-tabs {
+    display: none !important;
+  }
+  .col-right {
+    flex-direction: row;
+  }
+  .col-right .panel {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  #side .panel-book,
+  #side .panel-ticks {
+    display: flex !important;
+  }
+  .panel-chart {
+    height: min(58vh, 600px);
+  }
+  .q-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .q-stats.collapsed > div:nth-child(n + 7) {
+    display: flex;
+  }
+  .q-stats.collapsed > div:nth-child(n + 10) {
     display: none;
   }
 }
 
-@media (max-width: 560px) {
-  .q-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px 12px;
+/* 手机横屏：图表尽量占满屏幕 */
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
+  :root {
+    --topbar-h: 44px;
+    --tabbar-h: 44px;
   }
+  .tabbar button {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .tabbar svg {
+    width: 18px;
+    height: 18px;
+  }
+  .tabbar .badge {
+    top: 2px;
+  }
+  .app[data-view='quote'] .ticker,
+  .app[data-view='quote'] .q-stats,
+  .app[data-view='quote'] .q-more,
+  .app[data-view='quote'] .q-meta {
+    display: none;
+  }
+  .panel-quote {
+    padding: 8px 12px;
+  }
+  .q-top {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+  }
+  .q-ident {
+    grid-column: auto;
+  }
+  .q-price {
+    font-size: 24px;
+  }
+  /* 顶栏随页面滚走，图表高度等于可视区（减去底部导航），向上一滑即可全屏看图 */
+  .topbar {
+    position: static;
+  }
+  .panel-chart {
+    height: calc(100vh - var(--tabbar-h) - 16px);
+    min-height: 220px;
+  }
+  @supports (height: 100dvh) {
+    .panel-chart {
+      height: calc(100dvh - var(--tabbar-h) - var(--safe-bottom) - 16px);
+    }
+  }
+}
+
+.btn {
+  white-space: nowrap;
+}
+
+/* 小屏手机（≤ 380px，如 iPhone SE、部分安卓） */
+@media (max-width: 380px) {
   .brand-name {
+    display: none;
+  }
+  /* 「加自选 / 提醒」只显示图标 */
+  .q-actions .btn {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .q-actions .btn span {
+    display: none;
+  }
+  .q-actions .btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  .lg-opt {
     display: none;
   }
   .q-price {
     font-size: 26px;
   }
-  .q-actions {
-    margin-left: 0;
+  .wl-chg {
+    min-width: 64px;
   }
-  .chart-toolbar .tabs-sep {
-    display: none;
-  }
-  .text-btn {
+}
+
+@media (max-width: 480px) {
+  .lg-opt {
     display: none;
   }
 }

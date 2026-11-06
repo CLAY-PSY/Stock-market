@@ -2,8 +2,18 @@
 <html lang="zh-CN" data-theme="dark" data-updown="cn">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#11161f" />
+    <!-- 阻止 iOS 把股票代码、价格识别成电话号码 -->
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+    <!-- 添加到主屏幕（PWA） -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="StockPulse" />
     <!-- 运行模式：auto 自动探测 / server 使用 Node.js 服务 / static 浏览器直连（GitHub Pages 构建时自动写为 static） -->
     <meta name="stockpulse-mode" content="auto" />
     <meta name="description" content="StockPulse 实时行情：A 股、港股、美股实时报价、分时与 K 线、五档盘口、逐笔成交、市场排行、自选股与价格提醒。" />
@@ -13,7 +23,7 @@
     <script src="js/boot.js"></script>
   </head>
   <body>
-    <div class="app">
+    <div class="app" id="app" data-view="quote">
       <header class="topbar">
         <a class="brand" href="./" aria-label="StockPulse 首页">
           <span class="brand-logo" data-icon="logo"></span>
@@ -35,8 +45,13 @@
             aria-autocomplete="list"
           />
           <kbd class="search-kbd" title="按 / 或直接键入代码即可搜索">/</kbd>
+          <button class="search-cancel" id="search-cancel" type="button">取消</button>
           <ul id="search-results" class="search-results" role="listbox" hidden></ul>
         </div>
+
+        <button class="icon-btn mobile-only" id="btn-search" type="button" title="搜索" aria-label="搜索股票">
+          <span data-icon="search"></span>
+        </button>
 
         <div class="market-status" id="market-status" aria-label="市场状态"></div>
 
@@ -62,6 +77,7 @@
           <section class="panel panel-watchlist">
             <div class="panel-head">
               <h2>自选股 <span class="count" id="wl-count"></span></h2>
+              <button class="link-btn" id="wl-edit" type="button" aria-pressed="false">编辑</button>
               <div class="seg" id="wl-filter" role="tablist" aria-label="按市场筛选">
                 <button type="button" data-v="all">全部</button>
                 <button type="button" data-v="cn">沪深</button>
@@ -144,7 +160,12 @@
           </section>
         </section>
 
-        <aside class="col col-right">
+        <aside class="col col-right" id="side" data-tab="book">
+          <!-- 手机竖屏上盘口与成交明细切换显示 -->
+          <div class="seg side-tabs mobile-only" id="side-tabs" role="tablist" aria-label="盘口与成交明细">
+            <button type="button" data-v="book" aria-pressed="true">盘口</button>
+            <button type="button" data-v="ticks" aria-pressed="false">成交明细</button>
+          </div>
           <section class="panel panel-book">
             <div class="panel-head"><h2>盘口</h2><span class="hint" id="book-hint"></span></div>
             <div class="book" id="orderbook"></div>
@@ -161,9 +182,19 @@
         <span>数据来源：<span id="provider-label">腾讯财经</span>公开行情，仅供参考，不构成投资建议。港股为实时行情，美股行情可能存在延迟。</span>
         <span class="footer-right">
           图表由 <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts™</a> 提供
-          · 快捷键：<kbd>/</kbd> 搜索 <kbd>↑</kbd><kbd>↓</kbd> 切换自选 <kbd>Esc</kbd> 关闭
+          <span class="desktop-only">· 快捷键：<kbd>/</kbd> 搜索 <kbd>↑</kbd><kbd>↓</kbd> 切换自选 <kbd>Esc</kbd> 关闭</span>
         </span>
       </footer>
+
+      <!-- 手机底部导航 -->
+      <nav class="tabbar" id="tabbar" aria-label="主导航">
+        <button type="button" data-view="watch"><span data-icon="star"></span><span>自选</span></button>
+        <button type="button" data-view="quote"><span data-icon="chart"></span><span>行情</span></button>
+        <button type="button" data-view="rank"><span data-icon="rank"></span><span>排行</span></button>
+        <button type="button" data-view="alerts">
+          <span data-icon="bell"></span><span>提醒</span><span class="badge" id="tab-alerts-badge" hidden></span>
+        </button>
+      </nav>
     </div>
 
     <!-- 价格提醒列表 -->

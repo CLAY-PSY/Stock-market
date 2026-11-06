@@ -58,18 +58,37 @@ export function initQuotePanel({ onAlert }) {
   const root = $('#quote');
   let els = null;
   let current = null;
+  let statsExpanded = false;
 
   const build = (symbol) => {
     current = symbol;
     const star = h('button', { class: 'btn', type: 'button' });
-    const alertBtn = h('button', { class: 'btn', type: 'button', title: '设置价格提醒', html: `${icons.bell}<span>提醒</span>` });
+    const alertBtn = h('button', {
+      class: 'btn',
+      type: 'button',
+      title: '设置价格提醒',
+      'aria-label': '设置价格提醒',
+      html: `${icons.bell}<span>提醒</span>`,
+    });
     const price = h('span', { class: 'q-price num' }, '--');
     const change = h('span', { class: 'q-change' }, h('span', {}, '--'), h('span', {}, '--'));
     const name = h('h1', {}, store.nameOf(symbol));
     const status = h('span', { class: 'q-status' }, '');
     const typeTag = h('span', { class: 'tag' }, '');
     const meta = h('div', { class: 'q-meta' }, '正在加载行情…');
-    const stats = h('dl', { class: 'q-stats' });
+    const stats = h('dl', { class: `q-stats${statsExpanded ? '' : ' collapsed'}` });
+    // 手机上默认只显示前几项指标
+    const more = h('button', { class: 'q-more mobile-only', type: 'button', 'aria-expanded': String(statsExpanded) });
+    const syncMore = () => {
+      more.textContent = statsExpanded ? '收起 ▴' : '更多数据 ▾';
+      more.setAttribute('aria-expanded', String(statsExpanded));
+      stats.classList.toggle('collapsed', !statsExpanded);
+    };
+    more.addEventListener('click', () => {
+      statsExpanded = !statsExpanded;
+      syncMore();
+    });
+    syncMore();
 
     root.replaceChildren(
       h(
@@ -93,6 +112,7 @@ export function initQuotePanel({ onAlert }) {
         h('div', { class: 'q-actions' }, star, alertBtn),
       ),
       stats,
+      more,
     );
 
     star.addEventListener('click', () => {
@@ -121,6 +141,7 @@ export function initQuotePanel({ onAlert }) {
     els.star.classList.toggle('on', on);
     els.star.innerHTML = `${icons.star}<span>${on ? '已自选' : '加自选'}</span>`;
     els.star.title = on ? '移出自选' : '加入自选';
+    els.star.setAttribute('aria-label', els.star.title); // 小屏只显示图标时供读屏使用
   };
 
   const syncStatus = () => {

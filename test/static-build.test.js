@@ -59,6 +59,21 @@ test('所有 JS 模块的相对 import 都能在产物中找到', async () => {
   assert.ok(await exists(path.join(out, 'vendor/lightweight-charts.mjs')));
 });
 
+test('PWA 清单：相对路径，引用的图标都存在', async () => {
+  const manifest = JSON.parse(await readFile(path.join(out, 'manifest.webmanifest'), 'utf8'));
+  assert.equal(manifest.start_url, './', '部署在 /<仓库名>/ 子路径下，start_url 必须是相对路径');
+  assert.equal(manifest.scope, './');
+  assert.ok(manifest.icons.some((i) => i.sizes === '192x192'));
+  assert.ok(manifest.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable'));
+  for (const icon of manifest.icons) {
+    assert.ok(!icon.src.startsWith('/'), icon.src);
+    assert.ok(await exists(path.join(out, icon.src)), `缺少图标 ${icon.src}`);
+  }
+  const html = await readFile(path.join(out, 'index.html'), 'utf8');
+  assert.match(html, /viewport-fit=cover/, '需要 viewport-fit=cover 才能使用刘海屏安全区');
+  assert.match(html, /name="format-detection" content="telephone=no/, 'iOS 不应把价格识别为电话号码');
+});
+
 test('拒绝危险的输出目录', async () => {
   await assert.rejects(() => buildStatic(path.resolve('.')), /拒绝/);
   await assert.rejects(() => buildStatic(os.homedir()), /拒绝/);
