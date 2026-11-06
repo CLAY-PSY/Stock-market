@@ -1,5 +1,5 @@
 import { $ } from './dom.js';
-import { api } from './api.js';
+import { api, useDirectProvider } from './api.js';
 import { store } from './store.js';
 import { RealtimeClient } from './realtime.js';
 import { fmtPrice, fmtPct } from './format.js';
@@ -29,7 +29,34 @@ function pick(symbol) {
   else location.hash = `#/${symbol}`;
 }
 
+/**
+ * 运行模式：
+ *   server — 由本项目的 Node.js 服务提供数据（WebSocket 推送）；
+ *   static — 纯静态托管（GitHub Pages 等），浏览器直连行情接口并在本地轮询。
+ * 优先级：URL 参数 ?mode= → <meta name="stockpulse-mode">（构建 GitHub Pages 时写为 static）→ 自动探测。
+ */
+async function detectMode() {
+  const forced = new URLSearchParams(location.search).get('mode');
+  const declared = forced || document.querySelector('meta[name="stockpulse-mode"]')?.content || 'auto';
+  if (declared === 'server' || declared === 'static') return declared;
+  try {
+    const res = await fetch('api/health', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+    if (res.ok && (await res.json())?.ok) return 'server';
+  } catch {
+    /* 没有服务端 */
+  }
+  return 'static';
+}
+
 /* ------------------------------------------------------------- bootstrap */
+
+const mode = await detectMode();
+document.documentElement.dataset.mode = mode;
+let directProvider = null;
+if (mode === 'static') {
+  ({ directProvider } = await import('./data/direct-provider.js'));
+  useDirectProvider(directProvider);
+}
 
 const initial = symbolFromHash();
 if (initial) store.selected = initial;
@@ -54,8 +81,17 @@ if (!initial) history.replaceState(null, '', `#/${store.selected}`);
 
 /* -------------------------------------------------------------- realtime */
 
-const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
-const rt = new RealtimeClient(wsUrl);
+let rt;
+if (mode === 'static') {
+  const { LocalRealtime } = await import('./data/local-hub.js');
+  rt = new LocalRealtime(directProvider);
+} else {
+  const wsUrl = new URL('ws', location.href);
+  wsUrl.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  wsUrl.hash = '';
+  wsUrl.search = '';
+  rt = new RealtimeClient(wsUrl.href);
+}
 const banner = $('#banner');
 let upstreamMessage = null;
 let wasDisconnected = false;
@@ -91,7 +127,8 @@ rt.on('upstream', (msg) => {
   if (msg.ok) toast('行情数据源已恢复', { kind: 'success', duration: 2500 });
 });
 rt.on('state', (s) => {
-  renderConnection({ ...s, latency: rt.latency });
+  renderConnection({ ...s, latency: rt.latency, mode });
+  if (mode === 'static') return; // 直连模式本身就是轮询，无需降级
   if (s.state === 'open') {
     stopFallback();
     if (wasDisconnected) chartPanel.reload();
@@ -101,7 +138,7 @@ rt.on('state', (s) => {
     startFallback();
   }
 });
-rt.on('latency', (latency) => renderConnection({ state: rt.state, latency }));
+rt.on('latency', (latency) => renderConnection({ state: rt.state, latency, mode }));
 
 store.on('subscriptions', () => rt.setSymbols(store.subscriptionSet()));
 rt.setSymbols(store.subscriptionSet());

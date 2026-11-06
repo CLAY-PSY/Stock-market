@@ -27,15 +27,21 @@ const CONN_TEXT = {
   reconnecting: '重连中',
 };
 
-export function renderConnection({ state, latency, retryIn }) {
+export function renderConnection({ state, latency, retryIn, mode = 'server' }) {
   const el = $('#conn');
+  const direct = mode === 'static';
   el.classList.toggle('open', state === 'open');
   el.classList.toggle('down', state === 'reconnecting');
   let label = CONN_TEXT[state] ?? state;
-  if (state === 'open' && Number.isFinite(latency)) label = `实时 · ${latency}ms`;
+  if (state === 'open') label = direct ? '直连' : '实时';
+  if (state === 'open' && Number.isFinite(latency)) label = `${label} · ${latency}ms`;
   if (state === 'reconnecting' && retryIn) label = `重连中 (${Math.ceil(retryIn / 1000)}s)`;
   el.querySelector('.conn-label').textContent = label;
-  el.title = state === 'open' ? '已通过 WebSocket 接收实时推送' : '与行情服务器的连接已断开，正在自动重连';
+  if (direct) {
+    el.title = state === 'open' ? '浏览器直接从行情接口轮询（约 3 秒刷新）' : '行情接口暂时无法访问，正在自动重试';
+  } else {
+    el.title = state === 'open' ? '已通过 WebSocket 接收实时推送' : '与行情服务器的连接已断开，正在自动重连';
+  }
 }
 
 function startClock() {

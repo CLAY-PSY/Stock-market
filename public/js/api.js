@@ -1,9 +1,26 @@
+/**
+ * 数据访问层。
+ * - 服务端模式：请求同源的 REST 接口（相对路径，部署在子路径下也能工作）；
+ * - 静态模式（GitHub Pages）：useDirectProvider() 之后改为在浏览器内直接调用数据源，返回结构与 REST 接口一致。
+ */
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
   }
+}
+
+let direct = null;
+
+/** 切换到浏览器直连数据源 */
+export function useDirectProvider(provider) {
+  direct = provider;
+}
+
+/** 当前数据源的能力限制（例如静态模式下排行只支持涨跌幅）；服务端模式下为空对象 */
+export function capabilities() {
+  return direct?.capabilities ?? {};
 }
 
 async function request(path, { timeout = 12_000, signal } = {}) {
@@ -32,17 +49,50 @@ async function request(path, { timeout = 12_000, signal } = {}) {
   }
 }
 
+/** 直连模式下统一错误类型，并在调用方取消时丢弃结果 */
+async function viaDirect(fn, signal) {
+  try {
+    const result = await fn();
+    if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+    return result;
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err;
+    throw new ApiError(err?.message || '数据获取失败', err?.status ?? 0);
+  }
+}
+
 const q = (params) =>
   new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== null)).toString();
 
 export const api = {
-  health: () => request('/api/health'),
-  marketStatus: () => request('/api/market-status'),
-  quotes: (symbols) => request(`/api/quotes?${q({ symbols: symbols.join(',') })}`),
-  search: (text, opts) => request(`/api/search?${q({ q: text })}`, opts),
-  minute: (symbol, days = 1, opts) => request(`/api/minute/${encodeURIComponent(symbol)}?${q({ days })}`, opts),
-  kline: (symbol, { period, adjust, count = 500 }, opts) =>
-    request(`/api/kline/${encodeURIComponent(symbol)}?${q({ period, adjust, count })}`, opts),
-  ticks: (symbol, limit = 60, opts) => request(`/api/ticks/${encodeURIComponent(symbol)}?${q({ limit })}`, opts),
-  rank: (params, opts) => request(`/api/rank?${q(params)}`, opts),
+  marketStatus: () => (direct ? viaDirect(() => direct.getMarketStatus()) : request('api/market-status')),
+
+  quotes: (symbols) =>
+    direct
+      ? viaDirect(async () => {
+          const map = await direct.getQuotes(symbols);
+          return { data: symbols.map((s) => map.get(s)).filter(Boolean), missing: symbols.filter((s) => !map.has(s)) };
+        })
+      : request(`api/quotes?${q({ symbols: symbols.join(',') })}`),
+
+  search: (text, opts = {}) =>
+    direct ? viaDirect(async () => ({ data: await direct.search(text) }), opts.signal) : request(`api/search?${q({ q: text })}`, opts),
+
+  minute: (symbol, days = 1, opts = {}) =>
+    direct
+      ? viaDirect(() => direct.getMinute(symbol, { days }), opts.signal)
+      : request(`api/minute/${encodeURIComponent(symbol)}?${q({ days })}`, opts),
+
+  kline: (symbol, { period, adjust, count = 500 }, opts = {}) =>
+    direct
+      ? viaDirect(() => direct.getKline(symbol, { period, adjust, count }), opts.signal)
+      : request(`api/kline/${encodeURIComponent(symbol)}?${q({ period, adjust, count })}`, opts),
+
+  ticks: (symbol, limit = 60, opts = {}) =>
+    direct
+      ? viaDirect(() => direct.getTicks(symbol, { limit }), opts.signal)
+      : request(`api/ticks/${encodeURIComponent(symbol)}?${q({ limit })}`, opts),
+
+  rank: (params, opts = {}) =>
+    direct ? viaDirect(() => direct.getRank(params), opts.signal) : request(`api/rank?${q(params)}`, opts),
 };

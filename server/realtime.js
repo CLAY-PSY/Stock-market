@@ -17,7 +17,7 @@
  *   S→C {type:'pong', t, serverTime}
  */
 import { WebSocketServer } from 'ws';
-import { marketOf, normalizeSymbol } from './lib/symbols.js';
+import { marketOf, normalizeSymbol } from '../shared/symbols.js';
 import { logger } from './lib/logger.js';
 
 const UNKNOWN_TTL_MS = 10 * 60_000;

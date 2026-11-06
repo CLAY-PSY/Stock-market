@@ -2,11 +2,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import express from 'express';
-import { normalizeSymbol, parseSymbolList } from './lib/symbols.js';
+import { normalizeSymbol, parseSymbolList } from '../shared/symbols.js';
 import { logger } from './lib/logger.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(here, '../public');
+const SHARED_DIR = path.resolve(here, '../shared'); // 服务端与浏览器共用的模块
 const require = createRequire(import.meta.url);
 const CHARTS_FILE = path.join(
   path.dirname(require.resolve('lightweight-charts/package.json')),
@@ -156,6 +157,8 @@ export function createApp({ provider, hub }) {
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.type('application/javascript').sendFile(CHARTS_FILE);
   });
+
+  app.use('/shared', express.static(SHARED_DIR, { etag: true, maxAge: '5m' }));
 
   app.use(
     express.static(PUBLIC_DIR, {
