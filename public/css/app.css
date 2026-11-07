@@ -581,9 +581,10 @@ input[type='checkbox'] {
   font: 600 14px/1.3 var(--font-num);
   grid-row: 2;
 }
+/* 涨跌字号比点数小，贴底对齐会显得往下沉；与点数上下居中 */
 .tk-chg {
   grid-row: 2;
-  align-self: end;
+  align-self: center;
   font: 12px/1.3 var(--font-num);
   text-align: right;
 }
@@ -1006,9 +1007,10 @@ input[type='checkbox'] {
   font-size: 11px;
   color: var(--text-3);
 }
+/* 大号价格与右侧两行涨跌（涨跌额 / 涨跌幅）上下居中，两行整体与价格保持平衡 */
 .q-price-block {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
 }
 .q-price {
@@ -2185,6 +2187,11 @@ select,
   }
   .col + .col {
     margin-top: 8px;
+  }
+  /* 行情页隐藏了左栏，但 .col + .col 仍会匹配行情栏（相邻选择器不管前一个元素是否显示），
+     会比自选、排行页多出 8px；这里去掉，三个页面的第一块面板保持同一高度 */
+  .app[data-view='quote'] .col-main {
+    margin-top: 0;
   }
   .col-left {
     position: static;
