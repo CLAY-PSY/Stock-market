@@ -90,3 +90,16 @@ test('主屏幕 App：整页不回弹，导航和列表不选中文字，浅色�
   assert.match(strip.body, /height:\s*env\(safe-area-inset-top, 0px\)/);
   assert.match(strip.body, /pointer-events:\s*none/);
 });
+
+test('主屏幕 App 不使用透明状态栏（iOS 26 会在它下方叠一层模糊，标题栏雾蒙蒙）', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+  assert.doesNotMatch(html, /apple-mobile-web-app-status-bar-style/, '不要设置 apple-mobile-web-app-status-bar-style');
+  assert.match(html, /<meta name="theme-color"[^>]*prefers-color-scheme: dark/, '状态栏颜色来自 theme-color');
+  assert.match(html, /viewport-fit=cover/, '保留 viewport-fit=cover（横屏刘海与底部横条）');
+});
+
+test('平板两栏布局优先用 svh（iOS 主屏幕 App 的 100vh 偏大，Safari 工具栏伸缩时左栏不重排）', () => {
+  const tablet = topLevelRules(css).find((r) => r.prelude === '@media (max-width: 1280px)');
+  assert.ok(tablet, '缺少平板布局');
+  assert.match(tablet.body, /@supports \(height: 100svh\)[\s\S]*min-height:\s*100svh[\s\S]*height:\s*calc\(100svh - var\(--topbar-h\)/);
+});
