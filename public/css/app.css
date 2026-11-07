@@ -1400,21 +1400,23 @@ input[type='checkbox'] {
 
 /* -------------------------------------------------------------- drawer */
 
+/* 提醒面板与遮罩夹在标题栏与页脚（底部栏）之间，两者都不遮挡、可以点击（再点 🔔 收起）。
+   --sheet-bottom 为页脚在屏幕中露出的高度，由 alerts.js 计算 */
 .scrim {
   animation: fade-in 0.18s ease-out;
   position: fixed;
-  top: 0;
+  top: var(--topbar-h);
   right: 0;
-  bottom: 0;
+  bottom: var(--sheet-bottom, 0px);
   left: 0;
   background: rgba(0, 0, 0, 0.35);
   z-index: 50;
 }
 .drawer {
   position: fixed;
-  top: 0;
+  top: var(--topbar-h);
   right: 0;
-  bottom: 0;
+  bottom: var(--sheet-bottom, 0px);
   width: min(380px, 100vw);
   z-index: 60;
   background: var(--panel);
@@ -1426,6 +1428,15 @@ input[type='checkbox'] {
 }
 .drawer[hidden] {
   display: none;
+}
+/* 面板打开时标题栏在遮罩之上，搜索下拉框等也不会被遮住 */
+html.sheet-open .topbar {
+  z-index: 70;
+}
+/* 提醒面板打开时，🔔 显示为选中状态（再点一次收起） */
+#btn-alerts[aria-expanded='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 /* 收起：先播放滑出动画，结束后再隐藏（见 alerts.js） */
 .drawer.closing {
@@ -1899,11 +1910,18 @@ select,
     grid-template-columns: 280px minmax(0, 1fr);
     align-items: start;
   }
+  /* 页面整体滚动时标题栏吸顶，提醒面板打开时也始终在它下方 */
+  .topbar {
+    position: sticky;
+    top: 0;
+  }
+  /* 左栏吸在标题栏下方；高度再让出页脚（窄窗口下最多两行，约 50px），
+     否则滚到页面底部时左栏放不下，会被往上推到标题栏后面，挡住自选的标题行 */
   .col-left {
     grid-row: 1 / span 2;
     position: sticky;
-    top: var(--gap);
-    height: calc(100vh - 2 * var(--gap));
+    top: calc(var(--topbar-h) + var(--gap));
+    height: calc(100vh - var(--topbar-h) - 2 * var(--gap) - 50px);
   }
   .panel-chart {
     flex: none;
@@ -2350,17 +2368,19 @@ select,
   }
 
   /* 面板、弹窗、提示 */
-  /* 提醒面板作为一个「标签页」：盖住顶栏和内容，但留出底部导航，可以直接切到其它标签 */
+  /* 提醒面板作为一个「标签页」：位于标题栏和底部导航之间，两者都保持可见、可以直接操作 */
   .drawer {
+    top: calc(var(--topbar-h) + var(--safe-top));
     width: 100vw;
     bottom: calc(var(--tabbar-h) + var(--safe-bottom));
-    padding-top: var(--safe-top);
     border-left: 0;
     box-shadow: none;
     z-index: 42;
     animation: none;
   }
   .scrim {
+    top: calc(var(--topbar-h) + var(--safe-top));
+    bottom: calc(var(--tabbar-h) + var(--safe-bottom));
     z-index: 41;
   }
   .alert-item {
@@ -2452,6 +2472,11 @@ select,
   /* 顶栏随页面滚走，图表高度等于可视区（减去底部导航），向上一滑即可全屏看图 */
   .topbar {
     position: static;
+  }
+  /* 打开提醒时标题栏吸顶，提醒页仍在它下方 */
+  html.sheet-open .topbar {
+    position: sticky;
+    top: 0;
   }
   .panel-chart {
     height: calc(100vh - var(--tabbar-h) - 16px);
