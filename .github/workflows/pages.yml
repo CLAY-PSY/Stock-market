@@ -16,6 +16,8 @@ concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# 只在主仓库 Stock-market 部署网站；镜像出去的备份仓库（如 Stock-market-code）
+# 推送时只跑测试和构建，跳过上传与部署
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,13 +39,13 @@ jobs:
         run: npm run build:static
 
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.repository == 'CLAY-PSY/Stock-market'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.repository == 'CLAY-PSY/Stock-market'
     needs: build
     runs-on: ubuntu-latest
     environment:
