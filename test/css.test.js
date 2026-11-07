@@ -115,3 +115,16 @@ test('触屏设备隐藏滚动条（整页上下滑动时右侧不出现竖条�
   const thin = rules.filter((r) => !r.prelude.startsWith('@') && /scrollbar-width:\s*thin/.test(r.body));
   for (const r of thin) for (const sel of r.prelude.split(',').map((s) => s.trim())) assert.ok(touch.body.includes(sel), `触屏规则未覆盖 ${sel}`);
 });
+
+test('价格与涨跌上下平衡：行情页两行涨跌与大号价格居中，指数条涨跌与点数居中', () => {
+  const rules = topLevelRules(css);
+  const block = rules.find((r) => r.prelude === '.q-price-block');
+  assert.match(block?.body ?? '', /align-items:\s*center/, '大号价格与两行涨跌应上下居中（按基线对齐时第二行会垂到价格下方）');
+  const chg = rules.find((r) => r.prelude === '.tk-chg');
+  assert.match(chg?.body ?? '', /align-self:\s*center/, '指数条涨跌应与点数上下居中（贴底对齐会显得往下沉）');
+});
+
+test('手机上行情页的第一块面板与自选、排行页同高（隐藏左栏后不再多出栏间距）', () => {
+  const mobile = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
+  assert.match(mobile, /\.app\[data-view='quote'\] \.col-main\s*\{\s*margin-top:\s*0;/);
+});
