@@ -75,3 +75,18 @@ test('iOS 主屏幕 App：文档至少比 100% 高出顶部安全区（提醒和
   assert.match(block.body, /@supports \(-webkit-touch-callout: none\)/, '只对 iOS 生效');
   assert.match(block.body, /html\s*\{\s*min-height:\s*calc\(100% \+ env\(safe-area-inset-top, 0px\)\);/);
 });
+
+test('主屏幕 App：整页不回弹，导航和列表不选中文字，浅色主题给状态栏垫深色底', () => {
+  const rules = topLevelRules(css);
+  const find = (sel) => rules.find((r) => r.prelude.split(',').map((s) => s.trim()).includes(sel));
+  assert.match(find('html.standalone')?.body ?? '', /overscroll-behavior-y:\s*none/);
+  const noSelect = find('html.standalone .tabbar');
+  assert.ok(noSelect, '缺少主屏幕 App 的禁止选中规则');
+  for (const sel of ['html.standalone button', 'html.standalone .wl-item', 'html.standalone .rank-item']) assert.ok(noSelect.prelude.includes(sel), sel);
+  assert.ok(!/input|textarea|\.search\b|\.topbar\b/.test(noSelect.prelude), '不能波及输入框（iOS 上父元素禁止选中会导致输入框无法输入）');
+  assert.match(noSelect.body, /-webkit-user-select:\s*none/);
+  const strip = find("html.standalone[data-theme='light'] body::before");
+  assert.ok(strip, '缺少浅色主题的状态栏底色');
+  assert.match(strip.body, /height:\s*env\(safe-area-inset-top, 0px\)/);
+  assert.match(strip.body, /pointer-events:\s*none/);
+});
