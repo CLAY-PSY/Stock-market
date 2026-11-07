@@ -1400,13 +1400,14 @@ input[type='checkbox'] {
 
 /* -------------------------------------------------------------- drawer */
 
-/* 提醒面板与遮罩都从标题栏下方开始，标题栏始终可见、可以点击（再点 🔔 收起） */
+/* 提醒面板与遮罩夹在标题栏与页脚（底部栏）之间，两者都不遮挡、可以点击（再点 🔔 收起）。
+   --sheet-bottom 为页脚在屏幕中露出的高度，由 alerts.js 计算 */
 .scrim {
   animation: fade-in 0.18s ease-out;
   position: fixed;
   top: var(--topbar-h);
   right: 0;
-  bottom: 0;
+  bottom: var(--sheet-bottom, 0px);
   left: 0;
   background: rgba(0, 0, 0, 0.35);
   z-index: 50;
@@ -1415,7 +1416,7 @@ input[type='checkbox'] {
   position: fixed;
   top: var(--topbar-h);
   right: 0;
-  bottom: 0;
+  bottom: var(--sheet-bottom, 0px);
   width: min(380px, 100vw);
   z-index: 60;
   background: var(--panel);
@@ -2379,6 +2380,7 @@ select,
   }
   .scrim {
     top: calc(var(--topbar-h) + var(--safe-top));
+    bottom: calc(var(--tabbar-h) + var(--safe-bottom));
     z-index: 41;
   }
   .alert-item {

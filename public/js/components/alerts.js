@@ -85,12 +85,41 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
   let closeTimer = null;
   const isDrawerOpen = () => !drawer.hidden && !drawer.classList.contains('closing');
 
+  /*
+   * 桌面：提醒面板与遮罩的下边缘停在页脚（底部栏）上方，不遮挡它。
+   * 页脚高度会随窗口宽度换行变化；页面整体滚动的布局下它只在滚到底部时出现，
+   * 所以按页脚当前在屏幕里露出的高度计算，打开期间随滚动 / 缩放更新。手机上由 CSS 让出底部导航。
+   */
+  const footer = $('.footer');
+  const root = document.documentElement;
+  let bottomFrame = 0;
+  const updateSheetBottom = () => {
+    bottomFrame = 0;
+    if (isMobile() || !footer) {
+      root.style.removeProperty('--sheet-bottom');
+      return;
+    }
+    const top = footer.getBoundingClientRect().top;
+    const visible = Math.max(0, Math.min(window.innerHeight, window.innerHeight - top));
+    root.style.setProperty('--sheet-bottom', `${Math.round(visible)}px`);
+  };
+  const scheduleSheetBottom = () => {
+    if (!bottomFrame) bottomFrame = requestAnimationFrame(updateSheetBottom);
+  };
+  const trackSheetBottom = (on) => {
+    const method = on ? 'addEventListener' : 'removeEventListener';
+    window[method]('scroll', scheduleSheetBottom, { passive: true });
+    window[method]('resize', scheduleSheetBottom);
+    if (on) updateSheetBottom();
+  };
+
   const finishClose = () => {
     clearTimeout(closeTimer);
     drawer.hidden = true;
     scrim.hidden = true;
     drawer.classList.remove('closing');
     scrim.classList.remove('closing');
+    trackSheetBottom(false);
   };
 
   const openDrawer = () => {
@@ -98,6 +127,7 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
     if (!drawer.hidden) finishClose(); // 正在播放收起动画时又被打开
     const active = document.activeElement;
     opener = active && active !== document.body && !drawer.contains(active) ? active : null;
+    trackSheetBottom(true);
     drawer.hidden = false;
     scrim.hidden = false;
     document.documentElement.classList.add('sheet-open');
