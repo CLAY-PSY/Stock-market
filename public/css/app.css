@@ -1712,6 +1712,19 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+/*
+ * iOS 主屏幕 Web App（状态栏 black-translucent）：页面整体上移到状态栏下面，但 100% 高度仍按
+ * 「屏幕高度减状态栏」计算，文档比屏幕矮一个状态栏。文档不足一屏时（手机打开提醒或搜索会锁定滚动，
+ * 把文档裁成 100% 高），fixed 的底部导航会停在离屏幕底边一个状态栏高度的地方，下面露出一条空白。
+ * 让文档至少再高出顶部安全区，补齐这一截。只对 iOS（-webkit-touch-callout）的主屏幕 App 生效。
+ */
+@media (display-mode: standalone) {
+  @supports (-webkit-touch-callout: none) {
+    html {
+      min-height: calc(100% + env(safe-area-inset-top, 0px));
+    }
+  }
+}
 body {
   -webkit-tap-highlight-color: transparent;
 }

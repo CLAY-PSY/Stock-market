@@ -68,3 +68,10 @@ test('图表区域隔离层叠上下文（图表库内部的 z-index 不能盖�
   assert.ok(rule, '缺少 .chart-wrap 规则');
   assert.match(rule.body, /isolation:\s*isolate/);
 });
+
+test('iOS 主屏幕 App：文档至少比 100% 高出顶部安全区（提醒和搜索锁定滚动时，底部导航不悬空）', () => {
+  const block = topLevelRules(css).find((r) => r.prelude === '@media (display-mode: standalone)');
+  assert.ok(block, '缺少主屏幕 App 的适配');
+  assert.match(block.body, /@supports \(-webkit-touch-callout: none\)/, '只对 iOS 生效');
+  assert.match(block.body, /html\s*\{\s*min-height:\s*calc\(100% \+ env\(safe-area-inset-top, 0px\)\);/);
+});
