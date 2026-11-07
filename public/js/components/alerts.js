@@ -101,6 +101,7 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
     drawer.hidden = false;
     scrim.hidden = false;
     document.documentElement.classList.add('sheet-open');
+    $('#btn-alerts').setAttribute('aria-expanded', 'true');
     renderList();
     drawer.querySelector('[data-close]').focus({ preventScroll: true });
     onDrawerChange(true);
@@ -109,6 +110,7 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
     if (!isDrawerOpen()) return;
     const focusWasInside = drawer.contains(document.activeElement) || document.activeElement === document.body;
     document.documentElement.classList.remove('sheet-open');
+    $('#btn-alerts').setAttribute('aria-expanded', 'false');
     // 桌面：滑出后再隐藏；手机上它是一个「标签页」，直接切换；系统要求减少动态效果时也不播放
     if (!isMobile() && !prefersReducedMotion()) {
       drawer.classList.add('closing');
@@ -122,7 +124,8 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
     onDrawerChange(false);
   };
 
-  $('#btn-alerts').addEventListener('click', openDrawer);
+  // 标题栏一直可见，再点一次 🔔 收起提醒
+  $('#btn-alerts').addEventListener('click', () => (isDrawerOpen() ? closeDrawer() : openDrawer()));
   drawer.querySelector('[data-close]').addEventListener('click', closeDrawer);
   scrim.addEventListener('click', closeDrawer);
   document.addEventListener('keydown', (e) => {
