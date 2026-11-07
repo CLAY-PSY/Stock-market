@@ -1712,6 +1712,50 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+/*
+ * iOS 主屏幕 Web App（状态栏 black-translucent）：页面整体上移到状态栏下面，但 100% 高度仍按
+ * 「屏幕高度减状态栏」计算，文档比屏幕矮一个状态栏。文档不足一屏时（手机打开提醒或搜索会锁定滚动，
+ * 把文档裁成 100% 高），fixed 的底部导航会停在离屏幕底边一个状态栏高度的地方，下面露出一条空白。
+ * 让文档至少再高出顶部安全区，补齐这一截。只对 iOS（-webkit-touch-callout）的主屏幕 App 生效。
+ */
+@media (display-mode: standalone) {
+  @supports (-webkit-touch-callout: none) {
+    html {
+      min-height: calc(100% + env(safe-area-inset-top, 0px));
+    }
+  }
+}
+
+/* 主屏幕 App（html.standalone，由 boot.js 判断）：更接近原生 App 的手感 */
+/* 整页不回弹：否则在顶部下拉时标题栏会被一起拉下来，状态栏下面露出一截背景。内部的滚动区域不受影响 */
+html.standalone {
+  overscroll-behavior-y: none;
+}
+/* 点按导航、按钮和列表行时不选中文字（长按不会弹出「拷贝」） */
+html.standalone .tabbar,
+html.standalone .brand,
+html.standalone button,
+html.standalone .wl-item,
+html.standalone .rank-item,
+html.standalone .tk {
+  -webkit-user-select: none;
+  user-select: none;
+}
+/*
+ * 状态栏透明叠在页面上（black-translucent），iOS 的状态栏文字固定为白色。浅色主题下页面顶部是白色，
+ * 时间、信号、电量会看不清，所以给状态栏区域垫一条深色底。横屏时状态栏隐藏，安全区为 0，这条底也随之消失。
+ */
+html.standalone[data-theme='light'] body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: #11161f;
+  z-index: 1000;
+  pointer-events: none;
+}
 body {
   -webkit-tap-highlight-color: transparent;
 }
