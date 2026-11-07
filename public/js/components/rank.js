@@ -1,4 +1,4 @@
-import { $, $$, h, activatable } from '../dom.js';
+import { $, $$, h, activatable, trackOnScreen } from '../dom.js';
 import { api, capabilities } from '../api.js';
 import { store } from '../store.js';
 import { fmtPrice, fmtPct, fmtBig, fmtNum, trend, displayCode } from '../format.js';
@@ -18,6 +18,12 @@ export function initRank({ onPick }) {
   const board = $('#rank-board');
   let timer = null;
   let ctrl = null;
+  let loadedAt = 0;
+  const interval = () => (store.market?.cn?.open ?? true ? 10_000 : 120_000);
+  // 手机上排行页不显示时不轮询；切回排行页时数据已过期则立即刷新
+  const onScreen = trackOnScreen(list, () => {
+    if (Date.now() - loadedAt >= interval()) load();
+  });
 
   // 静态部署（浏览器直连）时数据源只支持部分排行，其余选项置灰
   const caps = capabilities().rank;
@@ -37,6 +43,7 @@ export function initRank({ onPick }) {
   const syncTabs = () => $$('button', tabs).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === store.settings.rankSort)));
 
   const load = async () => {
+    loadedAt = Date.now();
     const [sort, order] = store.settings.rankSort.split(':');
     ctrl?.abort();
     ctrl = new AbortController();
@@ -75,14 +82,10 @@ export function initRank({ onPick }) {
 
   const schedule = () => {
     clearTimeout(timer);
-    const open = store.market?.cn?.open ?? true;
-    timer = setTimeout(
-      async () => {
-        if (!document.hidden) await load();
-        schedule();
-      },
-      open ? 10_000 : 120_000,
-    );
+    timer = setTimeout(async () => {
+      if (!document.hidden && onScreen()) await load();
+      schedule();
+    }, interval());
   };
 
   tabs.addEventListener('click', (e) => {
@@ -102,6 +105,6 @@ export function initRank({ onPick }) {
   });
   store.on('market', schedule);
   syncTabs();
-  load();
+  if (onScreen()) load(); // 手机上首屏不是排行页时，等切过来再加载
   schedule();
 }

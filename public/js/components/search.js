@@ -154,10 +154,16 @@ export function initSearch({ onPick, sheet }) {
     }
   };
 
-  input.addEventListener('input', () => {
+  const scheduleQuery = () => {
     clearTimeout(timer);
     timer = setTimeout(() => query(input.value.trim()), 160);
+  };
+  // 拼音等输入法组字过程中输入框里是「teng'xun」这样的中间文本：不搜索，组字结束（选定汉字）后再搜
+  input.addEventListener('input', (e) => {
+    if (e.isComposing) return;
+    scheduleQuery();
   });
+  input.addEventListener('compositionend', scheduleQuery);
   input.addEventListener('focus', () => {
     if (input.value.trim()) render();
   });
@@ -166,6 +172,10 @@ export function initSearch({ onPick, sheet }) {
     if (!isOverlay()) setTimeout(close, 120);
   });
   input.addEventListener('keydown', (e) => {
+    // 输入法组字中的回车（确认拼音）、方向键（挑候选字）、Esc（取消组字）都交给输入法，
+    // 否则回车会直接打开半截拼音匹配到的第一条结果、Esc 会清空搜索框。
+    // Safari 确认组字的那次 keydown 不带 isComposing，但 keyCode 为 229
+    if (e.isComposing || e.keyCode === 229) return undefined;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (items.length) highlight((active + 1) % items.length);

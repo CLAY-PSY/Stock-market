@@ -76,6 +76,13 @@ test('格式化', () => {
   assert.equal(fmtPct(1.234), '+1.23%');
   assert.equal(fmtPct(-0.5), '-0.50%');
   assert.equal(fmtChange(0.1, 3), '+0.100');
+  // 舍入后为 0 时不带正负号（不显示 -0.00 / -0.00%）
+  assert.equal(fmtChange(-0.001, 2), '0.00');
+  assert.equal(fmtChange(0.004, 2), '0.00');
+  assert.equal(fmtChange(-0.001, 3), '-0.001');
+  assert.equal(fmtPct(-0.004), '0.00%');
+  assert.equal(fmtPct(-0), '0.00%');
+  assert.equal(fmtPct(-0.005), '-0.01%');
   assert.equal(fmtVolume(1_690_400, 'cn'), '1.69万手');
   assert.equal(fmtVolume(1234, 'us'), '1234股');
   assert.equal(trend(0), 'flat');

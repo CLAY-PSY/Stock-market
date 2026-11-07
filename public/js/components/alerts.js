@@ -167,6 +167,9 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
   $('#btn-new-alert').addEventListener('click', () => openDialog(store.selected));
   soundEl.checked = store.settings.sound;
   soundEl.addEventListener('change', () => store.setSetting('sound', soundEl.checked));
+  store.on('settings', ({ key, value }) => {
+    if (key === 'sound') soundEl.checked = Boolean(value); // 其它标签页改了提示音设置
+  });
 
   const renderBadge = () => {
     const n = store.alerts.filter((a) => a.active).length;
@@ -177,6 +180,19 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
     }
   };
 
+  /**
+   * 删除 / 重新启用后列表整体重绘，原来的按钮已不存在。焦点原本在列表里（键盘操作）时，
+   * 移到同一位置（删的是最后一条则为上一条）的删除按钮；列表空了就回到「新建提醒」。
+   */
+  const keepFocus = (index, action) => {
+    const hadFocus = listEl.contains(document.activeElement);
+    action();
+    if (!hadFocus) return;
+    const items = listEl.querySelectorAll('.alert-item');
+    const item = items[Math.min(index, items.length - 1)];
+    (item?.querySelector('.alert-ops button:last-child') ?? $('#btn-new-alert')).focus({ preventScroll: true });
+  };
+
   const renderList = () => {
     renderBadge();
     if (drawer.hidden) return;
@@ -185,7 +201,7 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
       return;
     }
     listEl.replaceChildren(
-      ...store.alerts.map((a) => {
+      ...store.alerts.map((a, index) => {
         const q = store.quotes.get(a.symbol);
         const decimals = q?.decimals ?? 2;
         const title = h(
@@ -204,11 +220,13 @@ export function initAlerts({ onPick, onDrawerChange = () => {} }) {
         const ops = h('div', { class: 'alert-ops' });
         if (!a.active) {
           const again = h('button', { class: 'icon-btn', type: 'button', title: '重新启用', 'aria-label': '重新启用', html: icons.refresh });
-          again.addEventListener('click', () => store.updateAlert(a.id, { active: true, triggeredAt: null, triggeredPrice: null }));
+          again.addEventListener('click', () =>
+            keepFocus(index, () => store.updateAlert(a.id, { active: true, triggeredAt: null, triggeredPrice: null })),
+          );
           ops.append(again);
         }
         const del = h('button', { class: 'icon-btn', type: 'button', title: '删除', 'aria-label': '删除提醒', html: icons.trash });
-        del.addEventListener('click', () => store.removeAlert(a.id));
+        del.addEventListener('click', () => keepFocus(index, () => store.removeAlert(a.id)));
         ops.append(del);
         return h(
           'li',

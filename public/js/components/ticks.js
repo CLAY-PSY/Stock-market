@@ -1,4 +1,4 @@
-import { $, h } from '../dom.js';
+import { $, h, trackOnScreen } from '../dom.js';
 import { api } from '../api.js';
 import { store } from '../store.js';
 import { fmtPrice, fmtLots, trendVs, marketOf } from '../format.js';
@@ -22,6 +22,7 @@ export function initTicks() {
   let ctrl = null;
   let lastVolume = null;
   let seq = 0;
+  let fetchedAt = 0;
 
   const render = (newIds = new Set()) => {
     if (!ticks.length) {
@@ -48,6 +49,7 @@ export function initTicks() {
   };
 
   const fetchTicks = async () => {
+    fetchedAt = Date.now();
     const sym = symbol;
     ctrl?.abort();
     ctrl = new AbortController();
@@ -66,24 +68,26 @@ export function initTicks() {
   };
 
   const pollable = () => marketOf(symbol ?? '') === 'cn' && !isCnIndex(symbol) && store.quotes.get(symbol)?.type !== 'index';
+  const interval = () => (store.market?.cn?.open ?? true ? POLL_MS : 60_000);
+  // 不在屏幕上时（手机上在别的页面、显示的是盘口，或还没滚到这里）不轮询；重新出现时数据已过期则立即刷新
+  const onScreen = trackOnScreen(list, () => {
+    if (pollable() && Date.now() - fetchedAt >= interval()) fetchTicks();
+  });
 
   const schedule = () => {
     clearTimeout(timer);
     if (!pollable()) return;
-    const open = store.market?.cn?.open ?? true;
-    timer = setTimeout(
-      async () => {
-        if (!document.hidden) await fetchTicks();
-        schedule();
-      },
-      open ? POLL_MS : 60_000,
-    );
+    timer = setTimeout(async () => {
+      if (!document.hidden && onScreen()) await fetchTicks();
+      schedule();
+    }, interval());
   };
 
   const onSelect = (sym) => {
     symbol = sym;
     ticks = [];
     lastVolume = null;
+    fetchedAt = 0;
     clearTimeout(timer);
     ctrl?.abort();
     const isCn = marketOf(sym) === 'cn';
@@ -96,7 +100,7 @@ export function initTicks() {
     hint.textContent = isCn ? '逐笔 · 单位：手' : '根据实时快照推算 · 单位：股';
     render();
     if (isCn) {
-      fetchTicks();
+      if (onScreen()) fetchTicks();
       schedule();
     }
   };
@@ -130,7 +134,7 @@ export function initTicks() {
     }
   });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && pollable()) fetchTicks();
+    if (!document.hidden && pollable() && onScreen()) fetchTicks();
   });
   onSelect(store.selected);
 }

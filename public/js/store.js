@@ -13,6 +13,12 @@ export { MAX_WATCHLIST, MAX_ALERTS };
 
 const STORAGE_KEY = 'stockpulse:v1';
 
+/**
+ * 多个标签页之间同步的设置（外观与提示音）。周期、指标、筛选、排行等属于各自页面的浏览状态，
+ * 不同步，免得在一个标签页里切换周期时另一个标签页的图表跟着跳。
+ */
+const SHARED_SETTINGS = ['theme', 'colorMode', 'sound'];
+
 export const INDICES = [
   'sh000001',
   'sz399001',
@@ -108,6 +114,41 @@ class Store {
     } catch {
       /* 隐私模式或存储已满时忽略 */
     }
+  }
+
+  /**
+   * 另一个标签页保存了改动：同步自选、提醒、名称缓存与外观设置。
+   * 否则本页下次保存时会用自己手里的旧列表把对方刚加的自选 / 提醒覆盖掉。
+   * 当前选中的股票属于各自页面，不同步。
+   */
+  syncFromOtherTab(raw) {
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const saved = sanitizeSaved(parsed);
+    let subscriptionsChanged = false;
+    for (const [symbol, name] of Object.entries(saved.names)) if (!this.names.has(symbol)) this.names.set(symbol, name);
+    if (saved.watchlist && saved.watchlist.join(',') !== this.watchlist.join(',')) {
+      this.watchlist = saved.watchlist;
+      this.pickingDefault = false; // 对方已经挑好了默认自选，本页不再另挑一组
+      this.emit('watchlist', this.watchlist);
+      subscriptionsChanged = true;
+    }
+    if (JSON.stringify(saved.alerts) !== JSON.stringify(this.alerts)) {
+      this.alerts = saved.alerts;
+      this.emit('alerts', this.alerts);
+      subscriptionsChanged = true;
+    }
+    const remote = saved.settings ? migrateSettings(saved.settings) : null;
+    for (const key of SHARED_SETTINGS) {
+      if (remote?.[key] === undefined || remote[key] === this.settings[key]) continue;
+      this.settings = { ...this.settings, [key]: remote[key] };
+      this.emit('settings', { key, value: remote[key] });
+    }
+    if (subscriptionsChanged) this.emit('subscriptions');
   }
 
   /**
@@ -262,5 +303,9 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => store.flush());
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) store.flush();
+  });
+  // 其它标签页写入了本地存储（本页自己写入时不会收到这个事件）
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY && e.newValue) store.syncFromOtherTab(e.newValue);
   });
 }

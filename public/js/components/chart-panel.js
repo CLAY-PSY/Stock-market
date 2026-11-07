@@ -20,6 +20,10 @@ export function initChartPanel() {
   let ctrl = null;
   let loadedKey = null;
   let refreshTimer = null;
+  // 加载失败后自动重试：5s、10s、20s… 最长 60s 一次；网络恢复 / 切回前台 / 行情恢复时立即重试
+  let retryTimer = null;
+  let failures = 0;
+  let failed = false;
 
   // 新交易日开始时分时图需要整体重载；节流，避免上游尚未切换日期时每次推送都重载
   let lastStaleReload = 0;
@@ -67,6 +71,7 @@ export function initChartPanel() {
     const my = (token += 1);
     ctrl?.abort();
     ctrl = new AbortController();
+    clearTimeout(retryTimer);
     syncToolbar();
     if (!quiet || loadedKey !== key) showOverlay(h('div', {}, h('div', { class: 'spinner' }), '正在加载图表…'));
     try {
@@ -87,17 +92,42 @@ export function initChartPanel() {
       }
       loadedKey = key;
       overlay.hidden = true;
+      failures = 0;
+      failed = false;
       // 用最新推送的报价把图表补到最新
       const q = store.quotes.get(symbol);
       if (q) chart.applyQuote(q);
     } catch (err) {
       if (err.name === 'AbortError' || my !== token) return;
+      failures += 1;
+      failed = true;
+      const delay = Math.min(60_000, 5_000 * 2 ** (failures - 1));
+      retryTimer = setTimeout(() => {
+        if (!document.hidden) load({ quiet: true }); // 在后台时等切回前台再试（见下方 visibilitychange）
+      }, delay);
       const retry = h('button', { class: 'btn', type: 'button', style: 'margin-top:10px' }, '重试');
       retry.addEventListener('click', () => load());
-      showOverlay(h('div', {}, h('div', {}, `图表加载失败：${err.message}`), retry));
+      showOverlay(
+        h(
+          'div',
+          {},
+          h('div', {}, `图表加载失败：${err.message}`),
+          h('div', { class: 'overlay-sub' }, `${Math.round(delay / 1000)} 秒后自动重试`),
+          retry,
+        ),
+      );
     }
     scheduleRefresh();
   };
+
+  /** 当前处于加载失败状态时立即重试（网络恢复、切回前台、行情数据源恢复） */
+  const retryIfFailed = () => {
+    if (failed) load({ quiet: true });
+  };
+  window.addEventListener('online', retryIfFailed);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) retryIfFailed();
+  });
 
   // 定期用服务端数据校准（成交量等字段由实时推送推算，长时间运行会有细微偏差）
   const scheduleRefresh = () => {
@@ -148,5 +178,6 @@ export function initChartPanel() {
   return {
     refreshTheme: () => chart.refreshTheme(),
     reload: () => load({ quiet: true }),
+    retryIfFailed,
   };
 }

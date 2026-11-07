@@ -119,18 +119,25 @@ export function initHeader({ onThemeChange }) {
   applyTheme();
   applyUpDown();
 
+  // 主题与涨跌配色在设置变化时应用：本页点按钮，或其它标签页改了设置（store 同步过来）
+  store.on('settings', ({ key }) => {
+    if (key === 'theme') {
+      if (applyTheme()) onThemeChange();
+    } else if (key === 'colorMode') {
+      applyUpDown();
+      onThemeChange();
+    }
+  });
+
   // 主题按钮：跟随系统 → 浅色 → 深色 → 跟随系统
   $('#btn-theme').addEventListener('click', () => {
     const mode = nextThemeMode(store.settings.theme);
     store.setSetting('theme', mode);
-    if (applyTheme()) onThemeChange();
     const hint = mode === 'auto' ? `，当前为${THEME_LABEL[document.documentElement.dataset.theme]}` : '';
     toast(`主题：${THEME_LABEL[mode]}${hint}`, { duration: 1800 });
   });
   $('#btn-updown').addEventListener('click', () => {
     store.setSetting('colorMode', store.settings.colorMode === 'intl' ? 'cn' : 'intl');
-    applyUpDown();
-    onThemeChange();
   });
   // 系统切换深浅外观时（手动切换、定时自动切换），「跟随系统」模式下立即跟随
   const onSystemChange = () => {
