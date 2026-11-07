@@ -33,6 +33,24 @@ export function activatable(el, onActivate) {
   return el;
 }
 
+/**
+ * 跟踪元素是否在屏幕上（没有被隐藏，且在可视区内）。手机上一次只显示一个视图，
+ * 不在屏幕上的列表不必轮询；从看不见变为看得见时调用 onShow（例如切到排行页、切到「成交明细」）。
+ * @returns 查询函数：当前是否在屏幕上。不支持 IntersectionObserver 的环境始终视为可见
+ */
+export function trackOnScreen(el, onShow) {
+  if (typeof IntersectionObserver !== 'function') return () => true;
+  // 第一次回调之前，按元素是否被渲染（display 不为 none）估计
+  let visible = el.getClientRects().length > 0;
+  new IntersectionObserver((entries) => {
+    const now = entries[entries.length - 1].isIntersecting;
+    const shown = now && !visible;
+    visible = now;
+    if (shown) onShow?.();
+  }).observe(el);
+  return () => visible;
+}
+
 /** 当前是否应减少动画（系统设置了「减少动态效果」） */
 export const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 

@@ -9,16 +9,19 @@ export function fmtPrice(v, decimals = 2) {
   return isNum(v) ? v.toFixed(decimals) : '--';
 }
 
-export function fmtChange(v, decimals = 2) {
-  if (!isNum(v)) return '--';
-  const s = v.toFixed(decimals);
+/** 带正负号的数字：舍入后为 0 时不带符号（-0.001 显示为 0.00，而不是 -0.00） */
+function signed(v, digits) {
+  const s = v.toFixed(digits);
+  if (Number(s) === 0) return (0).toFixed(digits);
   return v > 0 ? `+${s}` : s;
 }
 
+export function fmtChange(v, decimals = 2) {
+  return isNum(v) ? signed(v, decimals) : '--';
+}
+
 export function fmtPct(v, digits = 2) {
-  if (!isNum(v)) return '--';
-  const s = `${v.toFixed(digits)}%`;
-  return v > 0 ? `+${s}` : s;
+  return isNum(v) ? `${signed(v, digits)}%` : '--';
 }
 
 /** 大数字：1.23万 / 4.56亿 / 7.89万亿 */

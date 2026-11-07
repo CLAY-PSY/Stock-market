@@ -79,6 +79,26 @@ export function initWatchlist({ onPick }) {
     if (where === 'down' && i < wl.length - 1) store.moveInWatchlist(symbol, wl[i + 2]);
   };
 
+  /**
+   * 调整顺序 / 删除后列表整体重绘，原来的按钮已不存在。焦点原本在列表里（键盘操作）时：
+   * 移动后回到被移动那一行的同一个按钮（已到顶 / 到底而不可用时回到这一行）；删除后移到同一位置的行。
+   */
+  const keepFocus = (action, { symbol, label, index }) => {
+    const hadFocus = list.contains(document.activeElement);
+    action();
+    if (!hadFocus) return;
+    if (symbol && rows.has(symbol)) {
+      const row = rows.get(symbol).li;
+      const same = label ? row.querySelector(`[aria-label="${label}"]`) : null;
+      (same && !same.disabled ? same : row).focus({ preventScroll: true });
+      return;
+    }
+    const all = [...rows.values()];
+    const next = all[Math.min(index ?? 0, all.length - 1)];
+    if (next) next.li.focus({ preventScroll: true });
+    else editBtn.focus({ preventScroll: true });
+  };
+
   const editOps = (symbol) => {
     const wl = store.watchlist;
     const i = wl.indexOf(symbol);
@@ -86,7 +106,7 @@ export function initWatchlist({ onPick }) {
       const b = h('button', { type: 'button', class: 'wl-op', title: label, 'aria-label': label, html: icons[icon], disabled });
       b.addEventListener('click', (e) => {
         e.stopPropagation();
-        action();
+        keepFocus(action, { symbol, label });
       });
       return b;
     };
@@ -101,7 +121,8 @@ export function initWatchlist({ onPick }) {
 
   const removeSymbol = (symbol) => {
     const nm = store.nameOf(symbol);
-    store.removeFromWatchlist(symbol);
+    const index = [...rows.keys()].indexOf(symbol);
+    keepFocus(() => store.removeFromWatchlist(symbol), { index });
     toast(`已将 ${nm} 移出自选`, { duration: 2000 });
   };
 
@@ -257,6 +278,8 @@ export function initWatchlist({ onPick }) {
   // 键盘 ↑↓ 在自选股间切换
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    // 带修饰键的组合留给浏览器 / 系统（例如 Mac 上 ⌘↓ 跳到页面底部）
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.target.closest?.('input, textarea, select, dialog[open], .drawer, .rank-list, .search-results')) return;
     const syms = visibleSymbols();
     if (!syms.length) return;

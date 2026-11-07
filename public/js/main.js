@@ -189,7 +189,10 @@ rt.on('error', (msg) => {
 rt.on('upstream', (msg) => {
   upstreamMessage = msg.ok ? null : msg.message || '未知错误';
   renderBanner();
-  if (msg.ok) toast('行情数据源已恢复', { kind: 'success', duration: 2500 });
+  if (msg.ok) {
+    toast('行情数据源已恢复', { kind: 'success', duration: 2500 });
+    chartPanel.retryIfFailed(); // 图表之前没加载出来的，现在重新加载
+  }
 });
 rt.on('state', (s) => {
   renderConnection({ ...s, latency: rt.latency, mode });

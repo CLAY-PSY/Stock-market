@@ -1207,6 +1207,12 @@ input[type='checkbox'] {
 .chart-overlay[hidden] {
   display: none;
 }
+/* 加载失败时的「N 秒后自动重试」 */
+.overlay-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+}
 .spinner {
   width: 22px;
   height: 22px;

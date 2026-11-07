@@ -624,9 +624,19 @@ export class StockChart {
       }
     } else if (period === 'week' || period === 'month') {
       const same = period === 'week' ? weekKey(date) === weekKey(last.time) : date.slice(0, 7) === last.time.slice(0, 7);
-      if (same) bar = { ...last, high: Math.max(last.high, q.price), low: Math.min(last.low, q.price), close: q.price, volume: last.volume + delta };
-      else if (date > last.time && cum > 0) {
-        bar = { time: date, open: q.open ?? q.price, high: q.high ?? q.price, low: q.low ?? q.price, close: q.price, volume: cum };
+      // 最高 / 最低也参考报价里的当日最高 / 最低：两次推送之间冲高或探底的价格也要计入本周 / 本月
+      const dayHigh = q.high > 0 ? q.high : q.price;
+      const dayLow = q.low > 0 ? q.low : q.price;
+      if (same) {
+        bar = {
+          ...last,
+          high: Math.max(last.high, dayHigh, q.price),
+          low: Math.min(last.low, dayLow, q.price),
+          close: q.price,
+          volume: last.volume + delta,
+        };
+      } else if (date > last.time && cum > 0) {
+        bar = { time: date, open: q.open ?? q.price, high: dayHigh, low: dayLow, close: q.price, volume: cum };
         append = true;
       }
     } else {

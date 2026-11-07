@@ -20,8 +20,11 @@ export function toast(message, { kind = 'info', title, duration = 4000 } = {}) {
   };
   close.addEventListener('click', dismiss);
   root().append(el);
-  // 最多保留 5 条
-  while (root().children.length > 5) root().firstElementChild.remove();
+  // 最多保留 5 条：先挤掉最早的普通提示，价格提醒（需要手动关闭）尽量保留，免得还没看到就被别的提示顶掉
+  while (root().children.length > 5) {
+    const victim = [...root().children].find((t) => !t.classList.contains('toast-alert')) ?? root().firstElementChild;
+    victim.remove();
+  }
   if (duration) setTimeout(dismiss, duration);
   return dismiss;
 }
