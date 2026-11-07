@@ -73,6 +73,8 @@ docker run -p 3000:3000 stockpulse
 
 仓库自带 GitHub Actions 工作流（`.github/workflows/pages.yml`），推送到 `main` 后会自动运行测试、构建静态站点并发布到 GitHub Pages。
 
+发布只在 `CLAY-PSY/Stock-market` 这个仓库里进行。代码镜像到其它仓库（如备份仓库 Stock-market-code）后，推送只会运行测试和构建，跳过发布。如果要从别的仓库发布，请把 `pages.yml` 里两处 `github.repository == 'CLAY-PSY/Stock-market'` 改成那个仓库的名字。
+
 首次使用需要在仓库里开启一次：
 
 1. 打开仓库 **Settings → Pages**，在 **Build and deployment → Source** 中选择 **GitHub Actions**。此时 GitHub 会推荐「Static HTML」等工作流模板，**不需要提交**：模板会把仓库原样发布，没有构建步骤，而且会和本项目的 `pages.yml` 互相覆盖。
