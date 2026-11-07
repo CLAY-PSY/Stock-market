@@ -14,7 +14,11 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!--
+      不设置 apple-mobile-web-app-status-bar-style：iOS 26 会在透明状态栏（black-translucent）下方
+      叠一层模糊和压暗，主屏幕 App 的标题栏因此雾蒙蒙的，CSS 无法关闭。不设置时页面从状态栏下方开始，
+      状态栏不透明、按 theme-color 着色。iOS 只在添加到主屏幕时读取这项设置，旧的安装需要删除后重新添加。
+    -->
     <meta name="apple-mobile-web-app-title" content="StockPulse" />
     <!-- 运行模式：auto 自动探测 / server 使用 Node.js 服务 / static 浏览器直连（GitHub Pages 构建时自动写为 static） -->
     <meta name="stockpulse-mode" content="auto" />

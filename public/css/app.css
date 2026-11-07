@@ -1717,6 +1717,8 @@ html {
  * 「屏幕高度减状态栏」计算，文档比屏幕矮一个状态栏。文档不足一屏时（手机打开提醒或搜索会锁定滚动，
  * 把文档裁成 100% 高），fixed 的底部导航会停在离屏幕底边一个状态栏高度的地方，下面露出一条空白。
  * 让文档至少再高出顶部安全区，补齐这一截。只对 iOS（-webkit-touch-callout）的主屏幕 App 生效。
+ * 现在的页面已不再使用 black-translucent（见 index.html），新安装的顶部安全区为 0，这条规则不起作用；
+ * 保留它是为了照顾改动之前添加到主屏幕、还没重新添加的旧安装。
  */
 @media (display-mode: standalone) {
   @supports (-webkit-touch-callout: none) {
@@ -1744,6 +1746,7 @@ html.standalone .tk {
 /*
  * 状态栏透明叠在页面上（black-translucent），iOS 的状态栏文字固定为白色。浅色主题下页面顶部是白色，
  * 时间、信号、电量会看不清，所以给状态栏区域垫一条深色底。横屏时状态栏隐藏，安全区为 0，这条底也随之消失。
+ * 同样只对改动之前的旧安装有用：新安装的状态栏不透明、按 theme-color 着色，安全区为 0，这条底不会出现。
  */
 html.standalone[data-theme='light'] body::before {
   content: '';
@@ -1966,6 +1969,16 @@ select,
     position: sticky;
     top: calc(var(--topbar-h) + var(--gap));
     height: calc(100vh - var(--topbar-h) - 2 * var(--gap) - 50px);
+  }
+  /* 有 svh 时用它：iPad Safari 工具栏伸缩时不变（左栏不会随滚动重排）；
+     iOS 26 主屏幕 App 的 100vh 会比屏幕高出一截（WebKit bug 316008），svh 不受影响 */
+  @supports (height: 100svh) {
+    .app {
+      min-height: 100svh;
+    }
+    .col-left {
+      height: calc(100svh - var(--topbar-h) - 2 * var(--gap) - 50px);
+    }
   }
   .panel-chart {
     flex: none;
