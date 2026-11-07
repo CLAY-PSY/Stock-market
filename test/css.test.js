@@ -103,3 +103,15 @@ test('平板两栏布局优先用 svh（iOS 主屏幕 App 的 100vh 偏大，Saf
   assert.ok(tablet, '缺少平板布局');
   assert.match(tablet.body, /@supports \(height: 100svh\)[\s\S]*min-height:\s*100svh[\s\S]*height:\s*calc\(100svh - var\(--topbar-h\)/);
 });
+
+test('触屏设备隐藏滚动条（整页上下滑动时右侧不出现竖条），鼠标设备保留', () => {
+  const rules = topLevelRules(css);
+  const touch = rules.find((r) => r.prelude === '@media (hover: none) and (pointer: coarse)' && r.body.includes('scrollbar-width'));
+  assert.ok(touch, '缺少触屏设备的滚动条规则');
+  for (const sel of ['html,', 'html *', '.wl-list', '.rank-list', '.ticks', '.alert-list', '.search-results']) assert.ok(touch.body.includes(sel), sel);
+  assert.match(touch.body, /scrollbar-width:\s*none/);
+  assert.match(touch.body, /html::-webkit-scrollbar,\s*html \*::-webkit-scrollbar\s*\{\s*display:\s*none/);
+  // 按类名设置细滚动条的列表，在触屏规则里都要覆盖到（否则类选择器优先级更高，滚动条仍会出现）
+  const thin = rules.filter((r) => !r.prelude.startsWith('@') && /scrollbar-width:\s*thin/.test(r.body));
+  for (const r of thin) for (const sel of r.prelude.split(',').map((s) => s.trim())) assert.ok(touch.body.includes(sel), `触屏规则未覆盖 ${sel}`);
+});

@@ -1706,6 +1706,28 @@ html.sheet-open .topbar {
   scrollbar-color: var(--border-strong) transparent;
 }
 
+/*
+ * 触屏设备（手机、没接鼠标的平板）：隐藏所有滚动条，包括整页上下滑动时右侧出现的竖条。
+ * 用手指滑动用不到滚动条；接了鼠标或触控板的设备仍然显示，方便拖动。
+ * scrollbar-width 用于 iOS 18.2+ 及 Chrome、Firefox；::-webkit-scrollbar 照顾更早的 iOS。
+ * 上面几个列表的类选择器优先级高于 html *，所以要再列一遍。
+ */
+@media (hover: none) and (pointer: coarse) {
+  html,
+  html *,
+  .wl-list,
+  .rank-list,
+  .ticks,
+  .alert-list,
+  .search-results {
+    scrollbar-width: none;
+  }
+  html::-webkit-scrollbar,
+  html *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* -------------------------------------------------------------- touch & compat */
 
 html {
