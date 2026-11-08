@@ -141,11 +141,15 @@ test('手机上成交明细到一定高度后在框内滑动（不把整页拉�
 test('主屏幕 App 的液体玻璃底部导航（与选号页同款材质）：通透玻璃、高光描边、透镜滑块，内容可滚到玻璃上方', () => {
   const rules = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
   assert.match(rules, /html\.standalone \{[^}]*--tabbar-space:\s*calc\(var\(--glass-bottom\) \+ var\(--glass-h\) \+ 10px\)/, '内容底部留白要算上悬浮导航');
-  // 通透：几乎全透的底色 + 轻度模糊（深色 8%、浅色 3%；模糊 5px / 4px）
-  assert.match(rules, /--glass-bg:\s*rgba\(20, 22, 40, 0\.08\)/);
-  assert.match(rules, /--glass-bg:\s*rgba\(255, 255, 255, 0\.03\)/);
-  assert.match(rules, /--glass-blur:\s*blur\(5px\) saturate\(140%\)/);
-  assert.match(rules, /--glass-blur:\s*blur\(4px\) saturate\(140%\) brightness\(1\.02\)/);
+  // 透明：几乎无色的底色，背景滤镜里不模糊（背后的内容和不隔玻璃时一样清楚）
+  assert.match(rules, /--glass-bg:\s*rgba\(20, 22, 40, 0\.04\)/);
+  assert.match(rules, /--glass-bg:\s*rgba\(255, 255, 255, 0\.04\)/);
+  const filters = [...rules.matchAll(/--glass-blur:\s*([^;]+);/g)].map((m) => m[1]);
+  assert.equal(filters.length, 2);
+  for (const f of filters) assert.doesNotMatch(f, /blur\(/, `玻璃不模糊：${f}`);
+  // 选中滑块也是透明玻璃（浅色不超过 50% 白）
+  assert.match(rules, /--thumb-bg:\s*rgba\(255, 255, 255, 0\.45\)/);
+  assert.match(rules, /--thumb-bg:\s*rgba\(255, 255, 255, 0\.12\)/);
   assert.match(rules, /html\.standalone \.tabbar \{[^}]*border-radius:\s*calc\(var\(--glass-h\) \/ 2\)[^}]*backdrop-filter:\s*var\(--glass-blur\)/s, '胶囊形毛玻璃');
   // 高光描边：渐变 + 两层遮罩相减成一圈
   assert.match(rules, /html\.standalone \.tabbar::before,\s*html\.standalone \.tab-thumb::before \{[^}]*background:\s*var\(--glass-rim\)[^}]*mask-composite/s);

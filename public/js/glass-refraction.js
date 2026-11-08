@@ -15,9 +15,10 @@
 const NS = 'http://www.w3.org/2000/svg';
 const FILTER_ID = 'tabbar-refraction';
 const IOR = [1.47, 1.5, 1.53]; // 红、绿、蓝的折射率
-// 斜面宽度与玻璃厚度：导航只有 62px 高、背后是细小的文字，比选号页的大面板（28 / 80）弯得轻一些，免得文字扭成一团
-const BEZEL = 16;
-const THICK = 36;
+// 斜面宽度与玻璃厚度：导航只有 62px 高、背后是细小的文字，比选号页的大面板（28 / 80）窄一些、薄一些，
+// 边缘一圈的内容明显弯折、带彩边，中间仍然清清楚楚
+const BEZEL = 20;
+const THICK = 48;
 
 export function refractionSupported() {
   const brands = navigator.userAgentData?.brands;

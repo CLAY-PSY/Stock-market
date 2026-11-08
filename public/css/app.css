@@ -2600,7 +2600,7 @@ select,
 /*
  * ------------------------------------------------ 主屏幕 App：液体玻璃（Liquid Glass）底部导航
  * 材质与交互照搬「双色球 / 大乐透 随机选号」页（clay-psy.github.io/Lottery-generator）的液体玻璃：
- * 几乎全透的玻璃 + 轻度模糊（通透，背后的内容清楚可见），靠高光描边、深色细边和内侧透镜光带勾出轮廓；
+ * 透明玻璃：几乎无色、不模糊（背后的内容和不隔玻璃时一样清楚），靠高光描边、深色细边和内侧透镜光带勾出轮廓；
  * 选中滑块是一块实一些的玻璃，切换时带回弹滑过去并有液态拉伸，按住时放大变透、像透镜；手指处有触摸发光。
  * 折射：支持 backdrop-filter: url() 的浏览器（Chrome 等）由 glass-refraction.js 加上边缘透镜折射与色散；
  * Safari 暂不支持（WebKit bug 245510），只有材质与高光。只在主屏幕 App（html.standalone）里启用。
@@ -2618,8 +2618,9 @@ select,
     --tabbar-space: calc(var(--glass-bottom) + var(--glass-h) + 10px);
     --rim-w: 1.5px; /* 高光描边宽度 */
     /* 深色（与选号页深色模式同值） */
-    --glass-bg: rgba(20, 22, 40, 0.08); /* 玻璃底色：8% 深蓝灰，几乎全透 */
-    --glass-blur: blur(5px) saturate(140%); /* 轻度模糊、提饱和 */
+    --glass-bg: rgba(20, 22, 40, 0.04); /* 玻璃底色：4% 深蓝灰，几乎全透 */
+    /* 透明玻璃：不模糊，背后的内容和不隔玻璃时一样清楚；只略提饱和、提亮，显出玻璃质感 */
+    --glass-blur: saturate(130%) brightness(1.06);
     --glass-spec: radial-gradient(120% 85% at 18% 0%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 55%); /* 左上镜面反光 */
     --glass-rim: linear-gradient(140deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2) 20%, rgba(255, 255, 255, 0.1) 42%, rgba(255, 255, 255, 0.1) 62%, rgba(255, 255, 255, 0.18) 82%, rgba(255, 255, 255, 0.55));
     --glass-border: rgba(0, 0, 0, 0.6); /* 外圈深色细边 */
@@ -2629,17 +2630,18 @@ select,
       inset 2px 2px 4px rgba(255, 255, 255, 0.16),
       inset -2px -2px 4px rgba(255, 255, 255, 0.08),
       inset 0 0 16px rgba(255, 255, 255, 0.05); /* 顶部亮线 + 左上 / 右下透镜光带 + 内侧柔光 */
-    --glass-drop: 0 12px 32px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
-    --thumb-bg: rgba(255, 255, 255, 0.22); /* 选中滑块底色 */
-    --thumb-lens: rgba(255, 255, 255, 0.1); /* 按住时的透镜底色（更透） */
+    --glass-drop: 0 8px 24px rgba(0, 0, 0, 0.28), 0 1px 4px rgba(0, 0, 0, 0.2); /* 投影放轻，不压暗周围内容 */
+    --thumb-bg: rgba(255, 255, 255, 0.12); /* 选中滑块：也是透明玻璃，靠高光描边勾出 */
+    --thumb-lens: rgba(255, 255, 255, 0.06); /* 按住时的透镜底色（更透） */
     --glow: rgba(255, 255, 255, 0.26); /* 触摸发光 */
-    --label-glow: 0 0 8px rgba(0, 0, 0, 0.6), 0 0 2px rgba(0, 0, 0, 0.4); /* 文字光晕：背后内容透出来时也看得清 */
-    --icon-glow: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55));
+    /* 背后内容清清楚楚地透出来，文字和图标靠更浓的光晕保持清楚 */
+    --label-glow: 0 0 6px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 0.9);
+    --icon-glow: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 4px rgba(0, 0, 0, 0.6));
   }
   html.standalone[data-theme='light'] {
     /* 浅色（与选号页浅色模式同值） */
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-blur: blur(4px) saturate(140%) brightness(1.02);
+    --glass-bg: rgba(255, 255, 255, 0.04);
+    --glass-blur: saturate(130%) brightness(1.02);
     --glass-spec: radial-gradient(120% 85% at 18% 0%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 55%);
     --glass-rim: linear-gradient(140deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.42) 20%, rgba(255, 255, 255, 0.22) 42%, rgba(255, 255, 255, 0.22) 62%, rgba(255, 255, 255, 0.42) 82%, rgba(255, 255, 255, 0.9));
     --glass-border: rgba(15, 23, 42, 0.16);
@@ -2649,15 +2651,15 @@ select,
       inset 2px 2px 4px rgba(255, 255, 255, 0.6),
       inset -2px -2px 4px rgba(255, 255, 255, 0.4),
       inset 0 0 16px rgba(255, 255, 255, 0.2);
-    --glass-drop: 0 12px 32px rgba(31, 41, 95, 0.14), 0 2px 6px rgba(31, 41, 95, 0.08);
-    --thumb-bg: rgba(255, 255, 255, 0.88);
-    --thumb-lens: rgba(255, 255, 255, 0.4);
+    --glass-drop: 0 8px 24px rgba(31, 41, 95, 0.1), 0 1px 4px rgba(31, 41, 95, 0.06);
+    --thumb-bg: rgba(255, 255, 255, 0.45);
+    --thumb-lens: rgba(255, 255, 255, 0.25);
     --glow: rgba(255, 255, 255, 0.8);
-    --label-glow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 2px rgba(255, 255, 255, 0.6);
-    --icon-glow: drop-shadow(0 0 3px rgba(255, 255, 255, 0.85));
+    --label-glow: 0 0 6px #fff, 0 0 2px #fff, 0 0 1px #fff;
+    --icon-glow: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
   }
 
-  /* 玻璃本体：几乎全透 + 轻度模糊；不用扩散值的阴影（Safari 26 遇到大圆角 + 扩散值会画出方形色块） */
+  /* 玻璃本体：几乎全透、不模糊；不用扩散值的阴影（Safari 26 遇到大圆角 + 扩散值会画出方形色块） */
   html.standalone .tabbar {
     left: 0;
     right: 0;
@@ -2674,7 +2676,7 @@ select,
     backdrop-filter: var(--glass-blur);
     box-shadow: var(--glass-inset), var(--glass-drop);
   }
-  /* 边缘折射（glass-refraction.js 只在支持的浏览器里加上 .refract）：先弯折背后内容，再轻度模糊 */
+  /* 边缘折射（glass-refraction.js 只在支持的浏览器里加上 .refract）：先弯折背后内容，再略提饱和、提亮 */
   html.standalone .tabbar.refract {
     -webkit-backdrop-filter: url(#tabbar-refraction) var(--glass-blur);
     backdrop-filter: url(#tabbar-refraction) var(--glass-blur);
