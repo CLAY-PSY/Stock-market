@@ -12,8 +12,10 @@
  *    改用 samasante/liquid-glass（MIT，https://github.com/samasante/liquid-glass）的思路「折射一份副本」：
  *    在导航玻璃正下方放一层导航大小的窗口，里面是与真实页面逐像素对齐的实时副本（滚动时平移，内容变化时重建，
  *    图表画布单独拷贝像素），对这一层用 filter: url()——Safari 支持对元素本身用 SVG 位移滤镜。
- *    照该项目的 BROWSERS.md 处理 WebKit 的几处问题：贴图只在形状变化时重算；内容变化时换新的滤镜 id
- *    （WebKit 按 id 缓存滤镜结果）；滤镜输入裁到导航大小、不超采样（WebKit 对滤镜输入尺寸有上限）。
+ *    照该项目的 BROWSERS.md 处理 WebKit 的几处问题：贴图只在形状变化时重算，并换新的滤镜 id（WebKit 按 id 缓存滤镜）；
+ *    滤镜输入裁到导航大小、不超采样（WebKit 对滤镜输入尺寸有上限）。
+ *    另外两点在 WebKit 2.52 上实测：滤镜区域必须用 objectBoundingBox（HTML 元素的 user space 原点与 Chromium 不同）；
+ *    副本滚动、重建时不需要也不应该换 id（元素重绘时滤镜照常重算，每帧换 id 会让滤镜每帧重建、滚动卡顿）。
  */
 const NS = 'http://www.w3.org/2000/svg';
 const IOR = [1.47, 1.5, 1.53]; // 红、绿、蓝的折射率
@@ -109,8 +111,8 @@ function el(name, attrs = {}) {
   return node;
 }
 
-function mapImage(url, w, h) {
-  const image = el('feImage', { x: 0, y: 0, width: w, height: h, preserveAspectRatio: 'none', result: 'rawMap' });
+function mapImage(url) {
+  const image = el('feImage', { preserveAspectRatio: 'none', result: 'map' });
   image.setAttribute('href', url);
   image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url); // 较早的 Safari 只认 xlink:href
   return image;
@@ -131,21 +133,20 @@ function defsSvg() {
 function buildFilter(svg, id, w, h) {
   const { map, max, ratio } = computeOffsets(w, h);
   const scale = Math.max(1, max * 2); // feDisplacementMap 的偏移 = scale × (贴图值 - 0.5)
+  // 单位：滤镜区域按元素自身的边框盒（objectBoundingBox 的 0～1），位移量按像素（primitiveUnits 为 userSpaceOnUse），
+  // 贴图不设子区域、默认铺满滤镜区域。不能整套用 userSpaceOnUse：WebKit 里 HTML 元素的 user space 原点不在元素左上角，
+  // 滤镜区域会落到别处，元素整块不显示（Chromium 则以元素左上角为原点）
   const filter = el('filter', {
     id,
     x: 0,
     y: 0,
-    width: w,
-    height: h,
-    filterUnits: 'userSpaceOnUse',
+    width: 1,
+    height: 1,
+    filterUnits: 'objectBoundingBox',
     primitiveUnits: 'userSpaceOnUse',
     'color-interpolation-filters': 'sRGB', // 贴图数值不做伽马换算
   });
-  filter.append(
-    el('feFlood', { 'flood-color': 'rgb(128,128,128)', 'flood-opacity': 1, result: 'mapBg' }),
-    mapImage(encode(map, w, h, max), w, h),
-    el('feComposite', { in: 'rawMap', in2: 'mapBg', operator: 'over', result: 'map' }),
-  );
+  filter.append(mapImage(encode(map, w, h, max)));
   const channel = ['1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0', '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0', '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0'];
   ['r', 'g', 'b'].forEach((c, k) => {
     filter.append(
@@ -210,24 +211,19 @@ function initMirror(tabbar) {
   document.body.append(box);
   tabbar.classList.add('mirror');
 
-  // 滤镜：只在形状（导航尺寸）变化时重算贴图；副本内容变化时换一个新 id 重新指向，
-  // 否则 WebKit 会沿用按 id 缓存的旧结果，画面停住（samasante/liquid-glass 的做法）
-  let filterEl = null;
+  // 滤镜：只在形状（导航尺寸）变化时重算贴图，并换一个新 id 重新指向（WebKit 按 id 缓存滤镜，改了滤镜内容不会自己刷新）。
+  // 副本内容变化（滚动、重建、拷贝画布）时不换 id：元素重绘时滤镜照常重算；每帧换 id 会让 Safari 每帧重建滤镜，滚动卡顿
   let version = 0;
   let size = '';
-  const refreshFilter = () => {
-    if (!filterEl) return;
-    version += 1;
-    filterEl.id = `tabbar-mirror-${version}`;
-    box.style.filter = `url(#${filterEl.id})`;
-  };
   const applyShape = () => {
     const w = box.offsetWidth;
     const h = box.offsetHeight;
     if (!w || !h || `${w}x${h}` === size) return;
     size = `${w}x${h}`;
-    filterEl = buildFilter(svg, 'tabbar-mirror', w, h);
-    refreshFilter();
+    version += 1;
+    const id = `tabbar-mirror-${version}`;
+    buildFilter(svg, id, w, h);
+    box.style.filter = `url(#${id})`;
   };
 
   /* 副本：#app（导航换成占位，保持子元素序号一致）+ 提醒页、遮罩 */
@@ -254,7 +250,6 @@ function initMirror(tabbar) {
 
   // 克隆不带滚动位置和输入框的当前值，照着真实页面补上
   const syncScroll = () => {
-    let changed = false;
     for (const node of scrolled) {
       if (!node.isConnected) {
         scrolled.delete(node);
@@ -262,16 +257,9 @@ function initMirror(tabbar) {
       }
       const twin = twinOf(node);
       if (!twin) continue;
-      if (Math.abs(twin.scrollTop - node.scrollTop) >= 1) {
-        twin.scrollTop = node.scrollTop;
-        changed = true;
-      }
-      if (Math.abs(twin.scrollLeft - node.scrollLeft) >= 1) {
-        twin.scrollLeft = node.scrollLeft;
-        changed = true;
-      }
+      if (Math.abs(twin.scrollTop - node.scrollTop) >= 1) twin.scrollTop = node.scrollTop;
+      if (Math.abs(twin.scrollLeft - node.scrollLeft) >= 1) twin.scrollLeft = node.scrollLeft;
     }
-    return changed;
   };
   const syncFields = () => {
     for (const [orig, copy] of pairs) {
@@ -291,7 +279,6 @@ function initMirror(tabbar) {
     const bar = box.getBoundingClientRect();
     const top = bar.top - THICK;
     const bottom = bar.bottom + THICK;
-    let changed = false;
     for (const [orig, copy] of canvases) {
       if (!copy || !orig.width || !orig.height) continue;
       const r = orig.getBoundingClientRect();
@@ -302,22 +289,20 @@ function initMirror(tabbar) {
       if (!ctx) continue;
       ctx.clearRect(0, 0, copy.width, copy.height);
       ctx.drawImage(orig, 0, 0);
-      changed = true;
     }
-    return changed;
   };
 
   // 副本与真实页面逐像素对齐：屏幕层抵消导航的位置，页面层跟着滚动，提醒页按真实位置摆放
   let placed = '';
   const place = () => {
-    if (!page) return false;
+    if (!page) return;
     const bar = box.getBoundingClientRect();
     const a = app.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
     const vh = window.innerHeight;
     const extra = layers.map((l) => (l.hidden ? '-' : (({ left, top, width, height }) => [left, top, width, height].join(' '))(l.getBoundingClientRect())));
     const key = [bar.left, bar.top, a.left, a.top, a.width, vw, vh, ...extra].join();
-    if (key === placed) return false;
+    if (key === placed) return;
     placed = key;
     view.style.width = `${vw}px`;
     view.style.height = `${vh}px`;
@@ -329,7 +314,6 @@ function initMirror(tabbar) {
       const r = orig.getBoundingClientRect();
       Object.assign(copy.style, { top: `${r.top}px`, left: `${r.left}px`, width: `${r.width}px`, height: `${r.height}px`, right: 'auto', bottom: 'auto' });
     });
-    return true;
   };
 
   const rebuild = () => {
@@ -355,7 +339,6 @@ function initMirror(tabbar) {
     syncFields();
     syncScroll();
     copyCanvases();
-    refreshFilter();
   };
 
   const shown = () => !document.hidden && tabbar.getClientRects().length > 0;
@@ -365,9 +348,8 @@ function initMirror(tabbar) {
     const visible = shown();
     if (box.hidden === visible) box.hidden = !visible;
     if (!visible || !page) return;
-    const moved = place();
-    const scrolledInside = syncScroll();
-    if (moved || scrolledInside) refreshFilter();
+    place();
+    syncScroll();
   };
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(tick);
@@ -457,7 +439,7 @@ function initMirror(tabbar) {
   // 图表重绘不会改动 DOM：定时把导航附近的画布拷过来；顺便核对一次位置（导航可能只移动、不改变大小）
   setInterval(() => {
     if (!page || !shown()) return;
-    if (copyCanvases()) refreshFilter();
+    copyCanvases();
     schedule();
   }, 600);
 

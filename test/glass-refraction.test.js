@@ -29,3 +29,13 @@ test('色散：红光折得最少、蓝光最多（折射率 1.47 / 1.5 / 1.53�
   assert.ok(ratio[0] < 1 && ratio[0] > 0.9, `红 ${ratio[0]}`);
   assert.ok(ratio[2] > 1 && ratio[2] < 1.1, `蓝 ${ratio[2]}`);
 });
+
+test('WebKit 兼容：滤镜区域按元素边框盒（objectBoundingBox），副本滚动时不换滤镜 id', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/js/glass-refraction.js', import.meta.url), 'utf8');
+  // WebKit 里 HTML 元素的 user space 原点与 Chromium 不同，整套用 userSpaceOnUse 时滤镜区域落到别处、玻璃里什么都不显示
+  assert.match(src, /filterUnits:\s*'objectBoundingBox'/);
+  assert.doesNotMatch(src, /filterUnits:\s*'userSpaceOnUse'/);
+  // 只有形状变化（applyShape）时才设置新的 filter: url()；每帧换 id 会让 Safari 每帧重建滤镜、滚动卡顿
+  assert.equal((src.match(/box\.style\.filter\s*=/g) ?? []).length, 1);
+});
