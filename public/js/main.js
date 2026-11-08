@@ -87,12 +87,6 @@ const initial = symbolFromHash();
 if (initial) store.selected = initial;
 
 nav = initMobileNav({ hasInitialSymbol: Boolean(initial) });
-// 主屏幕 App 的液体玻璃导航：支持的浏览器里再加上边缘折射（不支持时模块自己跳过，纯 CSS 玻璃不受影响）
-if (document.documentElement.classList.contains('standalone')) {
-  import('./glass-refraction.js')
-    .then((m) => m.initTabbarRefraction($('#tabbar')))
-    .catch(() => {});
-}
 
 let chartPanel;
 initHeader({ onThemeChange: () => chartPanel?.refreshTheme() });
