@@ -24,18 +24,11 @@ export function initTicks() {
   let seq = 0;
   let fetchedAt = 0;
 
-  // 列表在框内滑动时（手机上限高），底边淡出提示下面还有内容，滑到底时取消
-  const syncMore = () => list.classList.toggle('more-below', list.scrollTop + list.clientHeight < list.scrollHeight - 2);
-  list.addEventListener('scroll', syncMore, { passive: true });
-
   const render = (newIds = new Set()) => {
     if (!ticks.length) {
       list.replaceChildren(h('li', { class: 'empty' }, marketOf(symbol) === 'cn' ? '暂无成交' : '等待实时成交…'));
-      syncMore();
       return;
     }
-    // 已经往下翻看较早的成交时，新成交插在最上面不能把正在看的内容顶走：重绘后按新增行的高度补回滚动位置
-    const keep = list.scrollTop > 2 ? list.scrollTop : 0;
     const q = store.quotes.get(symbol);
     const ref = q?.prevClose;
     const decimals = q?.decimals ?? 2;
@@ -53,15 +46,6 @@ export function initTicks() {
         );
       }),
     );
-    if (keep) {
-      let added = 0;
-      for (const li of list.children) {
-        if (!li.classList.contains('new')) break; // 新成交都在最上面
-        added += li.offsetHeight;
-      }
-      list.scrollTop = keep + added;
-    }
-    syncMore();
   };
 
   const fetchTicks = async () => {
@@ -104,7 +88,6 @@ export function initTicks() {
     ticks = [];
     lastVolume = null;
     fetchedAt = 0;
-    list.scrollTop = 0; // 换了股票，从最新成交开始看
     clearTimeout(timer);
     ctrl?.abort();
     const isCn = marketOf(sym) === 'cn';

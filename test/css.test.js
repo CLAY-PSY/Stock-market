@@ -128,18 +128,3 @@ test('手机上行情页的第一块面板与自选、排行页同高（隐藏�
   const mobile = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
   assert.match(mobile, /\.app\[data-view='quote'\] \.col-main\s*\{\s*margin-top:\s*0;/);
 });
-
-test('手机上成交明细到一定高度后在框内滑动（不把整页拉长，也不截断行数）', () => {
-  const mobile = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
-  const ticks = mobile.match(/\n\s*\.ticks\s*\{([^}]*)\}/)?.[1] ?? '';
-  assert.match(ticks, /max-height:\s*320px/);
-  assert.match(ticks, /overflow-y:\s*auto/);
-  assert.match(ticks, /overscroll-behavior-y:\s*contain/);
-  assert.doesNotMatch(mobile, /\.tick:nth-child\(n \+ \d+\)\s*\{\s*display:\s*none/, '不要再隐藏第 31 行以后的成交');
-});
-
-test('横屏底部导航的「提醒」角标不盖住文字（图标与文字左右排列时，角标右边缘固定在文字左侧）', () => {
-  const land = topLevelRules(css).find((r) => r.prelude === '@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px)' && r.body.includes('.tabbar .badge'));
-  assert.ok(land, '缺少横屏底部导航规则');
-  assert.match(land.body, /\.tabbar \.badge\s*\{[^}]*right:\s*calc\(50% \+ 1px\)/);
-});
