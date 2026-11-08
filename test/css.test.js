@@ -153,9 +153,16 @@ test('主屏幕 App 的液体玻璃底部导航（与选号页同款材质）：
   assert.match(rules, /html\.standalone \.tabbar \{[^}]*border-radius:\s*calc\(var\(--glass-h\) \/ 2\)[^}]*backdrop-filter:\s*var\(--glass-blur\)/s, '胶囊形毛玻璃');
   // 高光描边：渐变 + 两层遮罩相减成一圈
   assert.match(rules, /html\.standalone \.tabbar::before,\s*html\.standalone \.tab-thumb::before \{[^}]*background:\s*var\(--glass-rim\)[^}]*mask-composite/s);
-  // 选中滑块：随当前标签滑动，按住时放大成透镜
-  assert.match(rules, /html\.standalone \.tab-thumb \{[^}]*translate:\s*calc\(var\(--tab-i, 0\) \* 100%\) 0/s);
-  assert.match(rules, /html\.standalone \.tabbar\.pressing \.tab-thumb \{[^}]*--thumb-s:\s*1\.1/s);
+  // 选中滑块：按 --tab-pos 停在当前标签下；按住导航鼓成透镜（左右 12px、上下 14px），里面的副本放大 1.3 倍
+  assert.match(rules, /html\.standalone \.tab-thumb \{[^}]*translate:\s*calc\(var\(--tab-pos\) \* var\(--thumb-w, 0px\)\) 0/s);
+  assert.match(rules, /html\.standalone \.tabbar\.dragging \.tab-thumb \{[^}]*--gx:\s*12px;\s*--gy:\s*14px/s);
+  assert.match(rules, /html\.standalone \.tabbar\.dragging \.tab-lens \{[^}]*--lens-mag:\s*1\.3/s);
+  assert.match(rules, /html\.standalone \.tabbar\.dragging button \{[^}]*mask-image:\s*linear-gradient\(90deg, #000 var\(--hole-a/s, '透镜下的原图标挖空');
+  assert.match(rules, /html\.standalone \.tabbar \{[^}]*touch-action:\s*none/s, '按住左右拖动不触发页面滚动');
+  // 位置与透镜大小是注册过的变量，过渡时滑块与放大副本保持对齐
+  for (const name of ['--tab-pos', '--gx', '--gy', '--lens-mag']) {
+    assert.ok(topLevelRules(css).some((r) => r.prelude === `@property ${name}`), `缺少 @property ${name}`);
+  }
   assert.match(rules, /html\.standalone \.alert-list \{[^}]*padding-bottom:\s*var\(--tabbar-space\)/, '提醒列表最后一条能滚到玻璃上方');
   // 浏览器里不显示滑块
   assert.ok(topLevelRules(css).some((r) => r.prelude === '.tab-thumb' && /display:\s*none/.test(r.body)));

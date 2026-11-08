@@ -2608,6 +2608,28 @@ select,
 .tab-thumb {
   display: none;
 }
+/* 透镜的位置、大小、放大倍数注册成可插值的变量：滑块、透镜里的放大副本都由它们算出，过渡时始终对齐。
+   不支持 @property 的旧浏览器上只是没有过渡动画 */
+@property --tab-pos {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@property --gx {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --gy {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --lens-mag {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
 @media (max-width: 899px) {
   html.standalone {
     --glass-h: 62px;
@@ -2632,7 +2654,7 @@ select,
       inset 0 0 16px rgba(255, 255, 255, 0.05); /* 顶部亮线 + 左上 / 右下透镜光带 + 内侧柔光 */
     --glass-drop: 0 8px 24px rgba(0, 0, 0, 0.28), 0 1px 4px rgba(0, 0, 0, 0.2); /* 投影放轻，不压暗周围内容 */
     --thumb-bg: rgba(255, 255, 255, 0.12); /* 选中滑块：也是透明玻璃，靠高光描边勾出 */
-    --thumb-lens: rgba(255, 255, 255, 0.06); /* 按住时的透镜底色（更透） */
+    --thumb-lens: rgba(255, 255, 255, 0.02); /* 按住时的透镜：几乎无色，像一颗透明水珠 */
     --glow: rgba(255, 255, 255, 0.26); /* 触摸发光 */
     /* 背后内容清清楚楚地透出来，文字和图标靠更浓的光晕保持清楚 */
     --label-glow: 0 0 6px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 0.9);
@@ -2653,7 +2675,7 @@ select,
       inset 0 0 16px rgba(255, 255, 255, 0.2);
     --glass-drop: 0 8px 24px rgba(31, 41, 95, 0.1), 0 1px 4px rgba(31, 41, 95, 0.06);
     --thumb-bg: rgba(255, 255, 255, 0.45);
-    --thumb-lens: rgba(255, 255, 255, 0.25);
+    --thumb-lens: rgba(255, 255, 255, 0.08);
     --glow: rgba(255, 255, 255, 0.8);
     --label-glow: 0 0 6px #fff, 0 0 2px #fff, 0 0 1px #fff;
     --icon-glow: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
@@ -2669,6 +2691,8 @@ select,
     height: var(--glass-h);
     padding: 4px;
     isolation: isolate; /* 触摸发光层留在玻璃里、文字下面 */
+    touch-action: none; /* 按住左右拖动选中透镜，不触发页面滚动 */
+    transition: --tab-pos 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
     border: 0.5px solid var(--glass-border);
     border-radius: calc(var(--glass-h) / 2);
     background: var(--glass-spec), var(--glass-bg);
@@ -2726,15 +2750,16 @@ select,
     transition-duration: 0.15s;
   }
 
-  /* 选中滑块：实一些的玻璃，随 --tab-i 滑到当前标签下，带回弹 */
+  /* 选中滑块：透明玻璃，按 --tab-pos 停在当前标签下；--gx / --gy 为向外鼓出的量（按住时变成透镜） */
   html.standalone .tab-thumb {
     display: block;
     position: absolute;
-    top: 4px;
-    bottom: 4px;
-    left: 4px;
-    width: calc((100% - 8px) / 4);
-    border-radius: calc(var(--glass-h) / 2 - 4px);
+    top: calc(4px - var(--gy));
+    bottom: calc(4px - var(--gy));
+    left: calc(4px - var(--gx));
+    width: calc(var(--thumb-w, 25%) + 2 * var(--gx));
+    overflow: hidden; /* 透镜里的放大副本裁成胶囊形 */
+    border-radius: 999px;
     isolation: isolate;
     background-image: var(--glass-spec);
     background-color: var(--thumb-bg);
@@ -2743,18 +2768,16 @@ select,
       inset 0 1px 0 rgba(255, 255, 255, 0.8),
       0 3px 10px rgba(0, 0, 0, 0.12),
       0 1px 2px rgba(0, 0, 0, 0.08);
-    translate: calc(var(--tab-i, 0) * 100%) 0;
-    scale: var(--thumb-s, 1);
+    translate: calc(var(--tab-pos) * var(--thumb-w, 0px)) 0;
     transition:
-      translate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-      scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      --gx 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      --gy 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
       background-color 0.25s,
       box-shadow 0.25s;
   }
   @supports not (translate: 0) {
     html.standalone .tab-thumb {
-      transform: translateX(calc(var(--tab-i, 0) * 100%)) scale(var(--thumb-s, 1));
-      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.25s;
+      transform: translateX(calc(var(--tab-pos) * var(--thumb-w, 0px)));
     }
   }
   /* 切换标签时的液态拉伸 */
@@ -2763,16 +2786,66 @@ select,
       animation: tab-morph 0.55s ease;
     }
   }
-  /* 按住导航时：滑块放大 1.1 倍、底色更透，像一块透镜 */
-  html.standalone .tabbar.pressing .tab-thumb {
-    --thumb-s: 1.1;
+  /* 按住导航：滑块鼓成透镜（左右各鼓出 12px、上下 14px，超出导航上下约 10px），跟着手指走（快速跟手、不回弹）；
+     边缘一圈彩色色散，里面是放大的图标 */
+  html.standalone .tabbar.dragging {
+    transition: --tab-pos 0.12s ease-out;
+  }
+  html.standalone .tabbar.dragging .tab-thumb {
+    --gx: 12px;
+    --gy: 14px;
+    background-image: none; /* 不要镜面反光的白雾，透镜保持通透 */
     background-color: var(--thumb-lens);
     box-shadow:
       var(--glass-edge),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      inset 2px 2px 4px rgba(255, 255, 255, 0.55),
-      inset -2px -2px 4px rgba(255, 255, 255, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      inset 1px 1px 2px rgba(255, 255, 255, 0.35),
+      inset -1px -1px 2px rgba(255, 255, 255, 0.25),
+      inset 3px 0 3px rgba(255, 56, 120, 0.45),
+      inset -3px 0 3px rgba(56, 150, 255, 0.5),
+      inset 0 3px 3px rgba(255, 206, 84, 0.35),
+      inset 0 -3px 3px rgba(84, 240, 200, 0.35),
       0 8px 20px rgba(0, 0, 0, 0.16);
+  }
+  /* 透镜里的放大副本：与导航上的图标对齐（随透镜移动反向平移），以透镜中心为原点放大 */
+  html.standalone .tab-lens {
+    position: absolute;
+    top: var(--gy);
+    left: calc(var(--gx) - var(--tab-pos) * var(--thumb-w, 0px));
+    width: calc(var(--thumb-w, 0px) * 4);
+    height: calc(var(--glass-h) - 8px);
+    display: flex;
+    pointer-events: none;
+    color: var(--accent);
+    opacity: 0;
+    scale: var(--lens-mag);
+    transform-origin: calc(var(--tab-pos) * var(--thumb-w, 0px) + var(--thumb-w, 0px) / 2) 50%;
+    transition:
+      opacity 0.15s,
+      --lens-mag 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  html.standalone .tabbar.dragging .tab-lens {
+    --lens-mag: 1.3;
+    opacity: 1;
+  }
+  html.standalone .tab-lens-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  html.standalone .tab-lens-item svg {
+    width: 22px;
+    height: 22px;
+  }
+  /* 透镜正下方的原图标挖空（--hole-a / --hole-b 由 mobile-nav.js 每帧更新），由放大的副本代替 */
+  html.standalone .tabbar.dragging button {
+    -webkit-mask-image: linear-gradient(90deg, #000 var(--hole-a, -1px), transparent var(--hole-a, -1px), transparent var(--hole-b, -1px), #000 var(--hole-b, -1px));
+    mask-image: linear-gradient(90deg, #000 var(--hole-a, -1px), transparent var(--hole-a, -1px), transparent var(--hole-b, -1px), #000 var(--hole-b, -1px));
   }
 
   html.standalone .tabbar button {
@@ -2812,6 +2885,15 @@ select,
 }
 /* 横屏：导航矮一些、窄一些，居中 */
 @media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
+  html.standalone .tab-lens-item {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 12px;
+  }
+  html.standalone .tab-lens-item svg {
+    width: 18px;
+    height: 18px;
+  }
   html.standalone {
     --glass-h: 50px;
     --glass-bottom: max(8px, calc(var(--safe-bottom) - 12px));
