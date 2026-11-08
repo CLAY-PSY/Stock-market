@@ -25,9 +25,11 @@ export function initMobileNav({ hasInitialSymbol }) {
   const listeners = new Set();
 
   const syncTabs = () => {
-    $$('button', tabbar).forEach((b) => {
+    $$('button', tabbar).forEach((b, i) => {
       const active = openSheetName === 'alerts' ? b.dataset.view === 'alerts' : b.dataset.view === view;
       b.setAttribute('aria-current', active ? 'page' : 'false');
+      // 主屏幕 App 的液体玻璃导航：当前标签下的玻璃胶囊按这个序号滑过去（见 CSS .tabbar::before）
+      if (active) tabbar.style.setProperty('--tab-i', String(i));
     });
   };
 

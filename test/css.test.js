@@ -137,3 +137,22 @@ test('手机上成交明细到一定高度后在框内滑动（不把整页拉�
   assert.match(ticks, /overscroll-behavior-y:\s*contain/);
   assert.doesNotMatch(mobile, /\.tick:nth-child\(n \+ \d+\)\s*\{\s*display:\s*none/, '不要再隐藏第 31 行以后的成交');
 });
+
+test('主屏幕 App 的液体玻璃底部导航：悬浮胶囊、毛玻璃、滑动的选中胶囊，内容可滚到玻璃上方', () => {
+  const rules = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
+  assert.match(rules, /html\.standalone \{[^}]*--tabbar-space:\s*calc\(var\(--glass-bottom\) \+ var\(--glass-h\) \+ 10px\)/, '内容底部留白要算上悬浮导航');
+  assert.match(rules, /html\.standalone \.tabbar \{[^}]*border-radius:\s*calc\(var\(--glass-h\) \/ 2\)/, '胶囊形');
+  assert.match(rules, /--glass-filter:\s*blur\(22px\)/, '毛玻璃');
+  assert.match(rules, /html\.standalone \.tabbar \{[^}]*backdrop-filter:\s*var\(--glass-filter\)/, '毛玻璃');
+  assert.match(rules, /html\.standalone \.tabbar::before \{[^}]*translateX\(calc\(var\(--tab-i, 0\) \* 100%\)\)/, '选中胶囊随当前标签滑动');
+  assert.match(rules, /html\.standalone \.alert-list \{[^}]*padding-bottom:\s*var\(--tabbar-space\)/, '提醒列表最后一条能滚到玻璃上方');
+  // 其它地方都按 --tabbar-space 计算，不再直接用导航高度 + 安全区（否则悬浮导航下会被遮住）
+  const uses = css.match(/calc\(var\(--tabbar-h\) \+ var\(--safe-bottom\)\)/g) ?? [];
+  assert.equal(uses.length, 2, '只有变量定义和普通底部导航自身的高度直接用 --tabbar-h + --safe-bottom');
+});
+
+test('横屏底部导航的「提醒」角标不盖住文字（图标与文字左右排列时，角标右边缘固定在文字左侧）', () => {
+  const land = topLevelRules(css).find((r) => r.prelude === '@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px)' && r.body.includes('.tabbar .badge'));
+  assert.ok(land, '缺少横屏底部导航规则');
+  assert.match(land.body, /\.tabbar \.badge\s*\{[^}]*right:\s*calc\(50% \+ 1px\)/);
+});

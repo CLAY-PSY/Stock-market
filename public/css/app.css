@@ -2056,12 +2056,15 @@ select,
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
     --safe-right: env(safe-area-inset-right, 0px);
+    /* 底部导航在屏幕底部占用的总高度（页面底部留白、提醒页下边缘、横屏图表高度都按它算）；
+       主屏幕 App 的液体玻璃导航会重新定义它 */
+    --tabbar-space: calc(var(--tabbar-h) + var(--safe-bottom));
   }
 
   .app {
     height: auto;
     min-height: 100vh;
-    padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    padding-bottom: var(--tabbar-space);
     /* 兜底：任何内容都不能把页面撑宽（否则 iOS Safari 会整体缩小页面，顶栏右侧露出空白） */
     overflow-x: clip;
   }
@@ -2475,7 +2478,7 @@ select,
   .drawer {
     top: calc(var(--topbar-h) + var(--safe-top));
     width: 100vw;
-    bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    bottom: var(--tabbar-space);
     border-left: 0;
     box-shadow: none;
     z-index: 42;
@@ -2483,7 +2486,7 @@ select,
   }
   .scrim {
     top: calc(var(--topbar-h) + var(--safe-top));
-    bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    bottom: var(--tabbar-space);
     z-index: 41;
   }
   .alert-item {
@@ -2550,8 +2553,10 @@ select,
     width: 18px;
     height: 18px;
   }
+  /* 横屏时图标与文字左右排列：角标的右边缘固定在文字左侧，向左压在图标右上角，几位数都不会盖住文字 */
   .tabbar .badge {
     top: 2px;
+    right: calc(50% + 1px);
   }
   .app[data-view='quote'] .ticker,
   .app[data-view='quote'] .q-stats,
@@ -2582,15 +2587,123 @@ select,
     top: 0;
   }
   .panel-chart {
-    height: calc(100vh - var(--tabbar-h) - 16px);
+    height: calc(100vh - var(--tabbar-space) - 16px);
     min-height: 220px;
   }
   @supports (height: 100dvh) {
     .panel-chart {
-      height: calc(100dvh - var(--tabbar-h) - var(--safe-bottom) - 16px);
+      height: calc(100dvh - var(--tabbar-space) - 16px);
     }
   }
 }
+
+/*
+ * ------------------------------------------------ 主屏幕 App：液体玻璃（Liquid Glass）底部导航
+ * 仿 iOS 26 的悬浮导航：胶囊形玻璃浮在内容上方，页面滚到它下面时透过模糊、提亮的玻璃隐约可见；
+ * 顶部边缘有高光，当前标签下垫一块会滑动的玻璃胶囊。网页拿不到系统的玻璃材质与边缘折射，
+ * 这里用 backdrop-filter + 渐变高光近似。只在主屏幕 App（html.standalone）里启用，浏览器里保持原样。
+ */
+@media (max-width: 899px) {
+  html.standalone {
+    --glass-h: 62px;
+    --glass-bottom: max(10px, calc(var(--safe-bottom) - 12px)); /* 悬在底部横条上方 */
+    --glass-side: max(16px, calc(var(--safe-left) + 8px), calc(var(--safe-right) + 8px));
+    --glass-max: 560px;
+    /* 内容最后一行要能滚到玻璃上方：留出 导航离底距离 + 导航高度 + 间隙 */
+    --tabbar-space: calc(var(--glass-bottom) + var(--glass-h) + 10px);
+    --glass-tint: rgba(30, 36, 48, 0.55);
+    --glass-solid: rgba(24, 29, 39, 0.94);
+    --glass-edge: rgba(255, 255, 255, 0.14);
+    --glass-hi: rgba(255, 255, 255, 0.22);
+    --glass-pill: rgba(255, 255, 255, 0.13);
+    --glass-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+    --glass-filter: blur(22px) saturate(190%) brightness(1.08);
+  }
+  html.standalone[data-theme='light'] {
+    --glass-tint: rgba(255, 255, 255, 0.68);
+    --glass-solid: rgba(255, 255, 255, 0.95);
+    --glass-edge: rgba(255, 255, 255, 0.8);
+    --glass-hi: rgba(255, 255, 255, 0.95);
+    --glass-pill: rgba(15, 23, 42, 0.07);
+    --glass-shadow: 0 12px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.08), 0 0 0 0.5px rgba(15, 23, 42, 0.08);
+    /* 浅色玻璃少提一点饱和度：否则下面的红绿色块会把整条导航染上颜色 */
+    --glass-filter: blur(22px) saturate(150%) brightness(1.04);
+  }
+  html.standalone .tabbar {
+    left: 0;
+    right: 0;
+    bottom: var(--glass-bottom);
+    width: min(var(--glass-max), calc(100% - 2 * var(--glass-side)));
+    margin: 0 auto;
+    height: var(--glass-h);
+    padding: 4px;
+    border: 1px solid var(--glass-edge);
+    border-radius: calc(var(--glass-h) / 2);
+    background: var(--glass-solid);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+  }
+  @supports (backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px)) {
+    html.standalone .tabbar {
+      background: var(--glass-tint);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+  }
+  /* 玻璃表面的高光：上沿亮、往下渐隐 */
+  html.standalone .tabbar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 70% at 50% -20%, rgba(255, 255, 255, 0.16), transparent 60%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 45%);
+  }
+  /* 当前标签下的玻璃胶囊：随 --tab-i（由 mobile-nav.js 设置）滑到对应位置 */
+  html.standalone .tabbar::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    z-index: 0;
+    width: calc((100% - 8px) / 4);
+    border-radius: calc(var(--glass-h) / 2 - 4px);
+    background: var(--glass-pill);
+    box-shadow: inset 0 1px 0 var(--glass-hi);
+    transform: translateX(calc(var(--tab-i, 0) * 100%));
+    transition: transform 0.38s cubic-bezier(0.3, 1.35, 0.5, 1);
+  }
+  html.standalone .tabbar button {
+    z-index: 2;
+    border-radius: calc(var(--glass-h) / 2 - 4px);
+  }
+  html.standalone .tabbar .badge {
+    top: 3px;
+  }
+  /* 提醒页铺到屏幕底部，列表从玻璃下面透过；末尾留白，最后一条能滚到玻璃上方 */
+  html.standalone .drawer,
+  html.standalone .scrim {
+    bottom: 0;
+  }
+  html.standalone .alert-list {
+    padding-bottom: var(--tabbar-space);
+  }
+}
+/* 横屏：导航矮一些、窄一些，居中 */
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
+  html.standalone {
+    --glass-h: 50px;
+    --glass-bottom: max(8px, calc(var(--safe-bottom) - 12px));
+    --glass-max: 460px;
+  }
+}
+/* 系统要求减少动态效果时，玻璃胶囊不滑动：由文末全局的 prefers-reduced-motion 规则统一处理（含 ::before） */
 
 .btn {
   white-space: nowrap;
