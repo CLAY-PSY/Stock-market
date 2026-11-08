@@ -137,3 +137,65 @@ test('手机上成交明细到一定高度后在框内滑动（不把整页拉�
   assert.match(ticks, /overscroll-behavior-y:\s*contain/);
   assert.doesNotMatch(mobile, /\.tick:nth-child\(n \+ \d+\)\s*\{\s*display:\s*none/, '不要再隐藏第 31 行以后的成交');
 });
+
+test('主屏幕 App 的液体玻璃底部导航（与选号页同款材质）：通透玻璃、高光描边、透镜滑块，内容可滚到玻璃上方', () => {
+  const rules = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
+  assert.match(rules, /html\.standalone \{[^}]*--tabbar-space:\s*calc\(var\(--glass-bottom\) \+ var\(--glass-h\) \+ 10px\)/, '内容底部留白要算上悬浮导航');
+  // 透明：几乎无色的底色，背景滤镜里不模糊（背后的内容和不隔玻璃时一样清楚）
+  assert.match(rules, /--glass-bg:\s*rgba\(20, 22, 40, 0\.04\)/);
+  assert.match(rules, /--glass-bg:\s*rgba\(255, 255, 255, 0\.04\)/);
+  const filters = [...rules.matchAll(/--glass-blur:\s*([^;]+);/g)].map((m) => m[1]);
+  assert.equal(filters.length, 2);
+  for (const f of filters) assert.doesNotMatch(f, /blur\(/, `玻璃不模糊：${f}`);
+  // 选中滑块也是透明玻璃（浅色不超过 50% 白）
+  assert.match(rules, /--thumb-bg:\s*rgba\(255, 255, 255, 0\.45\)/);
+  assert.match(rules, /--thumb-bg:\s*rgba\(255, 255, 255, 0\.12\)/);
+  assert.match(rules, /html\.standalone \.tabbar \{[^}]*border-radius:\s*calc\(var\(--glass-h\) \/ 2\)[^}]*backdrop-filter:\s*var\(--glass-blur\)/s, '胶囊形毛玻璃');
+  // 高光描边：渐变 + 两层遮罩相减成一圈
+  assert.match(rules, /html\.standalone \.tabbar::before,\s*html\.standalone \.tab-thumb::before \{[^}]*background:\s*var\(--glass-rim\)[^}]*mask-composite/s);
+  // 选中滑块：按 --tab-pos 停在当前标签下；按住导航鼓成透镜（左右 12px、上下 14px），里面的副本放大 1.3 倍
+  assert.match(rules, /html\.standalone \.tab-thumb \{[^}]*translate:\s*calc\(var\(--tab-pos\) \* var\(--thumb-w, 0px\)\) 0/s);
+  assert.match(rules, /html\.standalone \.tabbar\.dragging \.tab-thumb \{[^}]*--gx:\s*12px;\s*--gy:\s*14px/s);
+  assert.match(rules, /html\.standalone \.tabbar\.dragging \.tab-lens \{[^}]*--lens-mag:\s*1\.3/s);
+  assert.match(rules, /html\.standalone \.tabbar\.dragging button \{[^}]*mask-image:\s*linear-gradient\(90deg, #000 var\(--hole-a/s, '透镜下的原图标挖空');
+  assert.match(rules, /html\.standalone \.tabbar \{[^}]*touch-action:\s*none/s, '按住左右拖动不触发页面滚动');
+  // 位置与透镜大小是注册过的变量，过渡时滑块与放大副本保持对齐
+  for (const name of ['--tab-pos', '--gx', '--gy', '--lens-mag']) {
+    assert.ok(topLevelRules(css).some((r) => r.prelude === `@property ${name}`), `缺少 @property ${name}`);
+  }
+  assert.match(rules, /html\.standalone \.alert-list \{[^}]*padding-bottom:\s*var\(--tabbar-space\)/, '提醒列表最后一条能滚到玻璃上方');
+  // 浏览器里不显示滑块和 iPhone 的折射层
+  assert.ok(topLevelRules(css).some((r) => /^\.tab-thumb,\s*\.tab-mirror$/.test(r.prelude) && /display:\s*none/.test(r.body)));
+  // 其它地方都按 --tabbar-space 计算，不再直接用导航高度 + 安全区（否则悬浮导航下会被遮住）
+  const uses = css.match(/calc\(var\(--tabbar-h\) \+ var\(--safe-bottom\)\)/g) ?? [];
+  assert.equal(uses.length, 2, '只有变量定义和普通底部导航自身的高度直接用 --tabbar-h + --safe-bottom');
+});
+
+test('iPhone Safari 的折射层：与导航同位置同大小、紧贴在导航下面，副本静止、不重播动画', () => {
+  const rules = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
+  const box = rules.match(/html\.standalone \.tab-mirror \{([^}]*)\}/)?.[1] ?? '';
+  const bar = rules.match(/html\.standalone \.tabbar \{([^}]*)\}/)?.[1] ?? '';
+  // 位置、大小与导航用同一组变量
+  for (const prop of ['bottom', 'width', 'height', 'border-radius']) {
+    const a = box.match(new RegExp(`(?:^|[\\s;])${prop}:\\s*([^;]+);`))?.[1];
+    const b = bar.match(new RegExp(`(?:^|[\\s;])${prop}:\\s*([^;]+);`))?.[1];
+    assert.ok(a && a === b, `${prop}：折射层 ${a} / 导航 ${b}`);
+  }
+  assert.match(box, /position:\s*fixed/);
+  assert.match(box, /pointer-events:\s*none/, '不挡触摸');
+  assert.match(box, /clip-path:\s*inset\(0 round calc\(var\(--glass-h\) \/ 2\)\)/, '裁成胶囊形');
+  // 层级：导航（45）之下，提醒页（42）、遮罩（41）、顶栏（40）之上
+  const z = Number(box.match(/z-index:\s*(\d+)/)?.[1]);
+  const zOf = (sel) => Number(rules.match(new RegExp(`\\n\\s*${sel} \\{[^}]*z-index:\\s*(\\d+)`))?.[1]);
+  assert.equal(zOf('\\.tabbar'), 45);
+  assert.ok(z < 45 && z > zOf('\\.drawer') && z > zOf('\\.scrim'), `折射层 z-index ${z}`);
+  assert.match(rules, /\.tab-mirror-clip \{[^}]*overflow:\s*hidden/s, '滤镜输入裁到导航大小');
+  assert.match(rules, /\.tab-mirror \*,\s*\.tab-mirror \*::before,\s*\.tab-mirror \*::after \{[^}]*animation:\s*none !important[^}]*transition:\s*none !important/s);
+  assert.match(rules, /\.tab-mirror \.topbar \{[^}]*position:\s*relative !important/s, '副本里的标题栏不吸顶');
+});
+
+test('横屏底部导航的「提醒」角标不盖住文字（图标与文字左右排列时，角标右边缘固定在文字左侧）', () => {
+  const land = topLevelRules(css).find((r) => r.prelude === '@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px)' && r.body.includes('.tabbar .badge'));
+  assert.ok(land, '缺少横屏底部导航规则');
+  assert.match(land.body, /\.tabbar \.badge\s*\{[^}]*right:\s*calc\(50% \+ 1px\)/);
+});

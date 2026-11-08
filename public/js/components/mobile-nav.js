@@ -24,10 +24,135 @@ export function initMobileNav({ hasInitialSymbol }) {
   let openSheetName = null;
   const listeners = new Set();
 
+  /* ---------------------------------------- 主屏幕 App 液体玻璃导航（外观见 CSS .tab-thumb） */
+  /*
+   * 仿 iOS 26：按住导航，选中滑块鼓成一个透镜跳到手指处，左右拖动跟着手指走，透镜里的图标放大显示；
+   * 松手后弹回最近的标签并切换过去（轻点也走同一条路，带一下果冻效果）。
+   * 位置 --tab-pos（0～3，可为小数）与透镜大小都是注册过的 CSS 变量，由 CSS 过渡做回弹。
+   */
+  const thumb = tabbar.querySelector('.tab-thumb');
+  const buttons = $$('button', tabbar);
+  const isGlass = () => Boolean(thumb) && document.documentElement.classList.contains('standalone') && isMobile();
+  let thumbIndex = null;
+  let thumbW = 0;
+  const measure = () => {
+    thumbW = (tabbar.clientWidth - 8) / buttons.length;
+    tabbar.style.setProperty('--thumb-w', `${thumbW}px`);
+  };
+  new ResizeObserver(measure).observe(tabbar);
+  measure();
+  const setPos = (pos) => tabbar.style.setProperty('--tab-pos', pos.toFixed(3));
+
+  // 切换标签时滑块带回弹滑过去，同时播放一次液态拉伸
+  const moveThumb = (i) => {
+    if (i === thumbIndex) return;
+    const first = thumbIndex === null;
+    thumbIndex = i;
+    setPos(i);
+    if (first || !thumb) return;
+    thumb.classList.toggle('morph', false);
+    void thumb.offsetWidth; // 读一次布局，才能重新播放动画
+    thumb.classList.add('morph');
+  };
+  thumb?.addEventListener('animationend', () => thumb.classList.toggle('morph', false));
+
+  // 透镜里的内容：一份对齐导航的图标 + 文字副本，放大后显示（第一次按下时再建，此时图标已经画好）
+  let lensRow = null;
+  const buildLens = () => {
+    if (lensRow || !thumb) return;
+    lensRow = document.createElement('div');
+    lensRow.className = 'tab-lens';
+    lensRow.setAttribute('aria-hidden', 'true');
+    for (const b of buttons) {
+      const item = document.createElement('span');
+      item.className = 'tab-lens-item';
+      const icon = b.querySelector('[data-icon] svg');
+      if (icon) item.append(icon.cloneNode(true));
+      const label = document.createElement('span');
+      label.textContent = b.querySelectorAll(':scope > span')[1]?.textContent ?? '';
+      item.append(label);
+      lensRow.append(item);
+    }
+    thumb.append(lensRow);
+  };
+
+  // 透镜正下方的原图标挖空（由放大的副本代替），否则会叠出两层
+  const updateHoles = () => {
+    const l = thumb.getBoundingClientRect();
+    for (const b of buttons) {
+      const r = b.getBoundingClientRect();
+      b.style.setProperty('--hole-a', `${(l.left - r.left).toFixed(1)}px`);
+      b.style.setProperty('--hole-b', `${(l.right - r.left).toFixed(1)}px`);
+    }
+  };
+
+  // 触摸发光：光晕跟着手指走，并带亮整条玻璃
+  const lit = [tabbar, thumb].filter(Boolean);
+  const placeGlow = (e) => {
+    for (const el of lit) {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--lx', `${e.clientX - r.left}px`);
+      el.style.setProperty('--ly', `${e.clientY - r.top}px`);
+    }
+  };
+
+  let drag = null; // { id, pos }
+  let frame = 0;
+  let suppressClick = false;
+  const posAt = (clientX) => {
+    const r = tabbar.getBoundingClientRect();
+    const p = (clientX - r.left - tabbar.clientLeft - 4) / thumbW - 0.5;
+    return Math.min(buttons.length - 1, Math.max(0, p));
+  };
+  const loop = () => {
+    updateHoles();
+    frame = drag ? requestAnimationFrame(loop) : 0;
+  };
+  tabbar.addEventListener('pointerdown', (e) => {
+    if (!isGlass() || e.button > 0) return;
+    buildLens();
+    measure();
+    drag = { id: e.pointerId, pos: posAt(e.clientX) };
+    tabbar.setPointerCapture?.(e.pointerId);
+    setPos(drag.pos);
+    tabbar.classList.add('dragging');
+    placeGlow(e);
+    lit.forEach((el) => el.classList.add('lit'));
+    updateHoles();
+    if (!frame) frame = requestAnimationFrame(loop);
+  });
+  tabbar.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag.pos = posAt(e.clientX);
+    setPos(drag.pos);
+    placeGlow(e);
+  });
+  const finish = (e, commit) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const index = Math.round(drag.pos);
+    drag = null;
+    tabbar.classList.toggle('dragging', false);
+    lit.forEach((el) => el.classList.toggle('lit', false));
+    if (!commit) {
+      setPos(thumbIndex ?? 0); // 被系统打断：回到原来的标签
+      return;
+    }
+    setPos(index); // 弹回最近的标签
+    // 由这里切换，接下来浏览器补发的 click 不再重复处理
+    suppressClick = true;
+    setTimeout(() => {
+      suppressClick = false;
+    }, 400);
+    selectTab(buttons[index]);
+  };
+  tabbar.addEventListener('pointerup', (e) => finish(e, true));
+  tabbar.addEventListener('pointercancel', (e) => finish(e, false));
+
   const syncTabs = () => {
-    $$('button', tabbar).forEach((b) => {
+    buttons.forEach((b, i) => {
       const active = openSheetName === 'alerts' ? b.dataset.view === 'alerts' : b.dataset.view === view;
       b.setAttribute('aria-current', active ? 'page' : 'false');
+      if (active) moveThumb(i);
     });
   };
 
@@ -89,7 +214,11 @@ export function initMobileNav({ hasInitialSymbol }) {
   /* ------------------------------------------------------------- controls */
 
   tabbar.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-view]');
+    if (suppressClick) return;
+    selectTab(e.target.closest('button[data-view]'));
+  });
+
+  function selectTab(btn) {
     if (!btn) return;
     const target = btn.dataset.view;
     if (target === 'alerts') {
@@ -105,7 +234,7 @@ export function initMobileNav({ hasInitialSymbol }) {
     }
     openSheetName = null;
     setView(target);
-  });
+  }
 
   // 盘口 / 成交明细切换（窄屏）
   $('#side-tabs').addEventListener('click', (e) => {

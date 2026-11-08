@@ -2056,12 +2056,15 @@ select,
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
     --safe-right: env(safe-area-inset-right, 0px);
+    /* 底部导航在屏幕底部占用的总高度（页面底部留白、提醒页下边缘、横屏图表高度都按它算）；
+       主屏幕 App 的液体玻璃导航会重新定义它 */
+    --tabbar-space: calc(var(--tabbar-h) + var(--safe-bottom));
   }
 
   .app {
     height: auto;
     min-height: 100vh;
-    padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    padding-bottom: var(--tabbar-space);
     /* 兜底：任何内容都不能把页面撑宽（否则 iOS Safari 会整体缩小页面，顶栏右侧露出空白） */
     overflow-x: clip;
   }
@@ -2475,7 +2478,7 @@ select,
   .drawer {
     top: calc(var(--topbar-h) + var(--safe-top));
     width: 100vw;
-    bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    bottom: var(--tabbar-space);
     border-left: 0;
     box-shadow: none;
     z-index: 42;
@@ -2483,7 +2486,7 @@ select,
   }
   .scrim {
     top: calc(var(--topbar-h) + var(--safe-top));
-    bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+    bottom: var(--tabbar-space);
     z-index: 41;
   }
   .alert-item {
@@ -2550,8 +2553,10 @@ select,
     width: 18px;
     height: 18px;
   }
+  /* 横屏时图标与文字左右排列：角标的右边缘固定在文字左侧，向左压在图标右上角，几位数都不会盖住文字 */
   .tabbar .badge {
     top: 2px;
+    right: calc(50% + 1px);
   }
   .app[data-view='quote'] .ticker,
   .app[data-view='quote'] .q-stats,
@@ -2582,15 +2587,377 @@ select,
     top: 0;
   }
   .panel-chart {
-    height: calc(100vh - var(--tabbar-h) - 16px);
+    height: calc(100vh - var(--tabbar-space) - 16px);
     min-height: 220px;
   }
   @supports (height: 100dvh) {
     .panel-chart {
-      height: calc(100dvh - var(--tabbar-h) - var(--safe-bottom) - 16px);
+      height: calc(100dvh - var(--tabbar-space) - 16px);
     }
   }
 }
+
+/*
+ * ------------------------------------------------ 主屏幕 App：液体玻璃（Liquid Glass）底部导航
+ * 材质与交互照搬「双色球 / 大乐透 随机选号」页（clay-psy.github.io/Lottery-generator）的液体玻璃：
+ * 透明玻璃：几乎无色、不模糊（背后的内容和不隔玻璃时一样清楚），靠高光描边、深色细边和内侧透镜光带勾出轮廓；
+ * 选中滑块是一块实一些的玻璃，切换时带回弹滑过去并有液态拉伸，按住时放大变透、像透镜；手指处有触摸发光。
+ * 折射（glass-refraction.js）：边缘透镜折射与色散。Chrome 等用 backdrop-filter: url() 直接弯折背后的页面；
+ * iPhone Safari 不支持这种写法（WebKit bug 245510），改为在导航正下方放一层与页面对齐的实时副本（.tab-mirror），
+ * 对它用 filter: url() 折射。只在主屏幕 App（html.standalone）里启用。
+ */
+.tab-thumb,
+.tab-mirror {
+  display: none;
+}
+/* 透镜的位置、大小、放大倍数注册成可插值的变量：滑块、透镜里的放大副本都由它们算出，过渡时始终对齐。
+   不支持 @property 的旧浏览器上只是没有过渡动画 */
+@property --tab-pos {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@property --gx {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --gy {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --lens-mag {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+@media (max-width: 899px) {
+  html.standalone {
+    --glass-h: 62px;
+    --glass-bottom: max(10px, calc(var(--safe-bottom) - 12px)); /* 悬在底部横条上方 */
+    --glass-side: max(16px, calc(var(--safe-left) + 8px), calc(var(--safe-right) + 8px));
+    --glass-max: 560px;
+    /* 内容最后一行要能滚到玻璃上方：留出 导航离底距离 + 导航高度 + 间隙 */
+    --tabbar-space: calc(var(--glass-bottom) + var(--glass-h) + 10px);
+    --rim-w: 1.5px; /* 高光描边宽度 */
+    /* 深色（与选号页深色模式同值） */
+    --glass-bg: rgba(20, 22, 40, 0.04); /* 玻璃底色：4% 深蓝灰，几乎全透 */
+    /* 透明玻璃：不模糊，背后的内容和不隔玻璃时一样清楚；只略提饱和、提亮，显出玻璃质感 */
+    --glass-blur: saturate(130%) brightness(1.06);
+    --glass-spec: radial-gradient(120% 85% at 18% 0%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 55%); /* 左上镜面反光 */
+    --glass-rim: linear-gradient(140deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2) 20%, rgba(255, 255, 255, 0.1) 42%, rgba(255, 255, 255, 0.1) 62%, rgba(255, 255, 255, 0.18) 82%, rgba(255, 255, 255, 0.55));
+    --glass-border: rgba(0, 0, 0, 0.6); /* 外圈深色细边 */
+    --glass-edge: 0 0 0.5px #000, 0 0 0.5px #000, 0 0 2px rgba(0, 0, 0, 0.55);
+    --glass-inset:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.16),
+      inset -2px -2px 4px rgba(255, 255, 255, 0.08),
+      inset 0 0 16px rgba(255, 255, 255, 0.05); /* 顶部亮线 + 左上 / 右下透镜光带 + 内侧柔光 */
+    --glass-drop: 0 8px 24px rgba(0, 0, 0, 0.28), 0 1px 4px rgba(0, 0, 0, 0.2); /* 投影放轻，不压暗周围内容 */
+    --thumb-bg: rgba(255, 255, 255, 0.12); /* 选中滑块：也是透明玻璃，靠高光描边勾出 */
+    --thumb-lens: rgba(255, 255, 255, 0.02); /* 按住时的透镜：几乎无色，像一颗透明水珠 */
+    --glow: rgba(255, 255, 255, 0.26); /* 触摸发光 */
+    /* 背后内容清清楚楚地透出来，文字和图标靠更浓的光晕保持清楚 */
+    --label-glow: 0 0 6px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 0.9);
+    --icon-glow: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 4px rgba(0, 0, 0, 0.6));
+  }
+  html.standalone[data-theme='light'] {
+    /* 浅色（与选号页浅色模式同值） */
+    --glass-bg: rgba(255, 255, 255, 0.04);
+    --glass-blur: saturate(130%) brightness(1.02);
+    --glass-spec: radial-gradient(120% 85% at 18% 0%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 55%);
+    --glass-rim: linear-gradient(140deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.42) 20%, rgba(255, 255, 255, 0.22) 42%, rgba(255, 255, 255, 0.22) 62%, rgba(255, 255, 255, 0.42) 82%, rgba(255, 255, 255, 0.9));
+    --glass-border: rgba(15, 23, 42, 0.16);
+    --glass-edge: 0 0 0.5px rgba(15, 23, 42, 0.3), 0 0 0.5px rgba(15, 23, 42, 0.3), 0 0 2px rgba(15, 23, 42, 0.1);
+    --glass-inset:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.6),
+      inset -2px -2px 4px rgba(255, 255, 255, 0.4),
+      inset 0 0 16px rgba(255, 255, 255, 0.2);
+    --glass-drop: 0 8px 24px rgba(31, 41, 95, 0.1), 0 1px 4px rgba(31, 41, 95, 0.06);
+    --thumb-bg: rgba(255, 255, 255, 0.45);
+    --thumb-lens: rgba(255, 255, 255, 0.08);
+    --glow: rgba(255, 255, 255, 0.8);
+    --label-glow: 0 0 6px #fff, 0 0 2px #fff, 0 0 1px #fff;
+    --icon-glow: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+  }
+
+  /* 玻璃本体：几乎全透、不模糊；不用扩散值的阴影（Safari 26 遇到大圆角 + 扩散值会画出方形色块） */
+  html.standalone .tabbar {
+    left: 0;
+    right: 0;
+    bottom: var(--glass-bottom);
+    width: min(var(--glass-max), calc(100% - 2 * var(--glass-side)));
+    margin: 0 auto;
+    height: var(--glass-h);
+    padding: 4px;
+    isolation: isolate; /* 触摸发光层留在玻璃里、文字下面 */
+    touch-action: none; /* 按住左右拖动选中透镜，不触发页面滚动 */
+    transition: --tab-pos 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: 0.5px solid var(--glass-border);
+    border-radius: calc(var(--glass-h) / 2);
+    background: var(--glass-spec), var(--glass-bg);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-inset), var(--glass-drop);
+  }
+  /* 边缘折射（glass-refraction.js 只在支持的浏览器里加上 .refract）：先弯折背后内容，再略提饱和、提亮 */
+  html.standalone .tabbar.refract {
+    -webkit-backdrop-filter: url(#tabbar-refraction) var(--glass-blur);
+    backdrop-filter: url(#tabbar-refraction) var(--glass-blur);
+  }
+  /* 高光描边：渐变铺在 1.5px 的内边距上，两层遮罩相减只留下一圈；左上、右下最亮 */
+  html.standalone .tabbar::before,
+  html.standalone .tab-thumb::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: inherit;
+    padding: var(--rim-w);
+    background: var(--glass-rim);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+  /* 触摸发光：以手指位置为中心的光晕（--lx / --ly 由 mobile-nav.js 设置），松手后淡出 */
+  html.standalone .tabbar::after,
+  html.standalone .tab-thumb::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(circle var(--glow-size, 90px) at var(--lx, 50%) var(--ly, 50%), var(--glow), transparent);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+  }
+  html.standalone .tabbar::after {
+    --glow-size: 150px;
+  }
+  html.standalone .tabbar.lit::after {
+    opacity: 0.55;
+    transition-duration: 0.15s;
+  }
+  html.standalone .tab-thumb.lit::after {
+    opacity: 1;
+    transition-duration: 0.15s;
+  }
+
+  /* 选中滑块：透明玻璃，按 --tab-pos 停在当前标签下；--gx / --gy 为向外鼓出的量（按住时变成透镜） */
+  html.standalone .tab-thumb {
+    display: block;
+    position: absolute;
+    top: calc(4px - var(--gy));
+    bottom: calc(4px - var(--gy));
+    left: calc(4px - var(--gx));
+    width: calc(var(--thumb-w, 25%) + 2 * var(--gx));
+    overflow: hidden; /* 透镜里的放大副本裁成胶囊形 */
+    border-radius: 999px;
+    isolation: isolate;
+    background-image: var(--glass-spec);
+    background-color: var(--thumb-bg);
+    box-shadow:
+      var(--glass-edge),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 3px 10px rgba(0, 0, 0, 0.12),
+      0 1px 2px rgba(0, 0, 0, 0.08);
+    translate: calc(var(--tab-pos) * var(--thumb-w, 0px)) 0;
+    transition:
+      --gx 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      --gy 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 0.25s,
+      box-shadow 0.25s;
+  }
+  @supports not (translate: 0) {
+    html.standalone .tab-thumb {
+      transform: translateX(calc(var(--tab-pos) * var(--thumb-w, 0px)));
+    }
+  }
+  /* 切换标签时的液态拉伸 */
+  @supports (translate: 0) {
+    html.standalone .tab-thumb.morph {
+      animation: tab-morph 0.55s ease;
+    }
+  }
+  /* 按住导航：滑块鼓成透镜（左右各鼓出 12px、上下 14px，超出导航上下约 10px），跟着手指走（快速跟手、不回弹）；
+     边缘一圈彩色色散，里面是放大的图标 */
+  html.standalone .tabbar.dragging {
+    transition: --tab-pos 0.12s ease-out;
+  }
+  html.standalone .tabbar.dragging .tab-thumb {
+    --gx: 12px;
+    --gy: 14px;
+    background-image: none; /* 不要镜面反光的白雾，透镜保持通透 */
+    background-color: var(--thumb-lens);
+    box-shadow:
+      var(--glass-edge),
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      inset 1px 1px 2px rgba(255, 255, 255, 0.35),
+      inset -1px -1px 2px rgba(255, 255, 255, 0.25),
+      inset 3px 0 3px rgba(255, 56, 120, 0.45),
+      inset -3px 0 3px rgba(56, 150, 255, 0.5),
+      inset 0 3px 3px rgba(255, 206, 84, 0.35),
+      inset 0 -3px 3px rgba(84, 240, 200, 0.35),
+      0 8px 20px rgba(0, 0, 0, 0.16);
+  }
+  /* 透镜里的放大副本：与导航上的图标对齐（随透镜移动反向平移），以透镜中心为原点放大 */
+  html.standalone .tab-lens {
+    position: absolute;
+    top: var(--gy);
+    left: calc(var(--gx) - var(--tab-pos) * var(--thumb-w, 0px));
+    width: calc(var(--thumb-w, 0px) * 4);
+    height: calc(var(--glass-h) - 8px);
+    display: flex;
+    pointer-events: none;
+    color: var(--accent);
+    opacity: 0;
+    scale: var(--lens-mag);
+    transform-origin: calc(var(--tab-pos) * var(--thumb-w, 0px) + var(--thumb-w, 0px) / 2) 50%;
+    transition:
+      opacity 0.15s,
+      --lens-mag 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  html.standalone .tabbar.dragging .tab-lens {
+    --lens-mag: 1.3;
+    opacity: 1;
+  }
+  html.standalone .tab-lens-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  html.standalone .tab-lens-item svg {
+    width: 22px;
+    height: 22px;
+  }
+  /* 透镜正下方的原图标挖空（--hole-a / --hole-b 由 mobile-nav.js 每帧更新），由放大的副本代替 */
+  html.standalone .tabbar.dragging button {
+    -webkit-mask-image: linear-gradient(90deg, #000 var(--hole-a, -1px), transparent var(--hole-a, -1px), transparent var(--hole-b, -1px), #000 var(--hole-b, -1px));
+    mask-image: linear-gradient(90deg, #000 var(--hole-a, -1px), transparent var(--hole-a, -1px), transparent var(--hole-b, -1px), #000 var(--hole-b, -1px));
+  }
+
+  html.standalone .tabbar button {
+    z-index: 2;
+    border-radius: calc(var(--glass-h) / 2 - 4px);
+    text-shadow: var(--label-glow);
+  }
+  html.standalone .tabbar svg {
+    filter: var(--icon-glow);
+  }
+  html.standalone .tabbar .badge {
+    top: 3px;
+    text-shadow: none;
+  }
+  /* 提醒页铺到屏幕底部，列表从玻璃下面透过；末尾留白，最后一条能滚到玻璃上方 */
+  html.standalone .drawer,
+  html.standalone .scrim {
+    bottom: 0;
+  }
+  html.standalone .alert-list {
+    padding-bottom: var(--tabbar-space);
+  }
+
+  /* iPhone Safari 的折射层：与导航同样大小、同样位置，紧贴在它下面（导航 45，提醒页 42），
+     里面是对齐的页面副本，由 glass-refraction.js 套上折射滤镜；导航自己的高光、描边、滑块照常画在上面 */
+  html.standalone .tab-mirror {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--glass-bottom);
+    z-index: 44;
+    width: min(var(--glass-max), calc(100% - 2 * var(--glass-side)));
+    height: var(--glass-h);
+    margin: 0 auto;
+    border-radius: calc(var(--glass-h) / 2);
+    -webkit-clip-path: inset(0 round calc(var(--glass-h) / 2));
+    clip-path: inset(0 round calc(var(--glass-h) / 2));
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  html.standalone .tab-mirror[hidden] {
+    display: none;
+  }
+  .tab-mirror-clip {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    contain: strict;
+  }
+  .tab-mirror-viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--bg);
+  }
+  .app.tab-mirror-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+  }
+  /* 副本是静止的画面：不重播动画；吸顶的标题栏留在原位（它在屏幕顶上，永远不会到导航后面） */
+  .tab-mirror *,
+  .tab-mirror *::before,
+  .tab-mirror *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .tab-mirror .topbar {
+    position: relative !important;
+    top: auto !important;
+  }
+}
+@keyframes tab-morph {
+  0% {
+    transform: none;
+  }
+  35% {
+    transform: scale(1.1, 0.9);
+  }
+  70% {
+    transform: scale(0.98, 1.03);
+  }
+  100% {
+    transform: none;
+  }
+}
+/* 横屏：导航矮一些、窄一些，居中 */
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
+  html.standalone .tab-lens-item {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 12px;
+  }
+  html.standalone .tab-lens-item svg {
+    width: 18px;
+    height: 18px;
+  }
+  html.standalone {
+    --glass-h: 50px;
+    --glass-bottom: max(8px, calc(var(--safe-bottom) - 12px));
+    --glass-max: 460px;
+  }
+}
+/* 系统要求减少动态效果时，滑块不滑动、不拉伸：由文末全局的 prefers-reduced-motion 规则统一处理 */
 
 .btn {
   white-space: nowrap;
