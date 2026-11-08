@@ -1734,6 +1734,11 @@ html.sheet-open .topbar {
   html *::-webkit-scrollbar {
     display: none;
   }
+  /* 没有滚动条后，框内可滑动的成交明细在底边淡出，提示下面还有内容；滑到底时取消（.more-below 由 ticks.js 维护） */
+  .ticks.more-below {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  }
 }
 
 /* -------------------------------------------------------------- touch & compat */
@@ -2366,14 +2371,20 @@ select,
   #side[data-tab='ticks'] .panel-book {
     display: none;
   }
+  /*
+   * 成交明细：列表长到一定高度后在框内滑动（保留全部最近成交），不再把整页拉长。
+   * 320px 加上标题与表头，正好与 A 股十档盘口面板等高，切换「盘口 / 成交明细」时区域高度基本不变；
+   * 平板竖屏、手机横屏两者并排时也一样高
+   */
   .panel-ticks {
     height: auto;
   }
   .ticks {
-    overflow: visible;
-  }
-  .tick:nth-child(n + 31) {
-    display: none;
+    flex: none;
+    max-height: 320px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain; /* 滑到列表底部时不带着整页一起滚 */
+    -webkit-overflow-scrolling: touch;
   }
   .book-row {
     padding: 4px 0;
