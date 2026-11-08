@@ -2599,10 +2599,15 @@ select,
 
 /*
  * ------------------------------------------------ 主屏幕 App：液体玻璃（Liquid Glass）底部导航
- * 仿 iOS 26 的悬浮导航：胶囊形玻璃浮在内容上方，页面滚到它下面时透过模糊、提亮的玻璃隐约可见；
- * 顶部边缘有高光，当前标签下垫一块会滑动的玻璃胶囊。网页拿不到系统的玻璃材质与边缘折射，
- * 这里用 backdrop-filter + 渐变高光近似。只在主屏幕 App（html.standalone）里启用，浏览器里保持原样。
+ * 材质与交互照搬「双色球 / 大乐透 随机选号」页（clay-psy.github.io/Lottery-generator）的液体玻璃：
+ * 几乎全透的玻璃 + 轻度模糊（通透，背后的内容清楚可见），靠高光描边、深色细边和内侧透镜光带勾出轮廓；
+ * 选中滑块是一块实一些的玻璃，切换时带回弹滑过去并有液态拉伸，按住时放大变透、像透镜；手指处有触摸发光。
+ * 折射：支持 backdrop-filter: url() 的浏览器（Chrome 等）由 glass-refraction.js 加上边缘透镜折射与色散；
+ * Safari 暂不支持（WebKit bug 245510），只有材质与高光。只在主屏幕 App（html.standalone）里启用。
  */
+.tab-thumb {
+  display: none;
+}
 @media (max-width: 899px) {
   html.standalone {
     --glass-h: 62px;
@@ -2611,24 +2616,48 @@ select,
     --glass-max: 560px;
     /* 内容最后一行要能滚到玻璃上方：留出 导航离底距离 + 导航高度 + 间隙 */
     --tabbar-space: calc(var(--glass-bottom) + var(--glass-h) + 10px);
-    --glass-tint: rgba(30, 36, 48, 0.55);
-    --glass-solid: rgba(24, 29, 39, 0.94);
-    --glass-edge: rgba(255, 255, 255, 0.14);
-    --glass-hi: rgba(255, 255, 255, 0.22);
-    --glass-pill: rgba(255, 255, 255, 0.13);
-    --glass-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
-    --glass-filter: blur(22px) saturate(190%) brightness(1.08);
+    --rim-w: 1.5px; /* 高光描边宽度 */
+    /* 深色（与选号页深色模式同值） */
+    --glass-bg: rgba(20, 22, 40, 0.08); /* 玻璃底色：8% 深蓝灰，几乎全透 */
+    --glass-blur: blur(5px) saturate(140%); /* 轻度模糊、提饱和 */
+    --glass-spec: radial-gradient(120% 85% at 18% 0%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 55%); /* 左上镜面反光 */
+    --glass-rim: linear-gradient(140deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2) 20%, rgba(255, 255, 255, 0.1) 42%, rgba(255, 255, 255, 0.1) 62%, rgba(255, 255, 255, 0.18) 82%, rgba(255, 255, 255, 0.55));
+    --glass-border: rgba(0, 0, 0, 0.6); /* 外圈深色细边 */
+    --glass-edge: 0 0 0.5px #000, 0 0 0.5px #000, 0 0 2px rgba(0, 0, 0, 0.55);
+    --glass-inset:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.16),
+      inset -2px -2px 4px rgba(255, 255, 255, 0.08),
+      inset 0 0 16px rgba(255, 255, 255, 0.05); /* 顶部亮线 + 左上 / 右下透镜光带 + 内侧柔光 */
+    --glass-drop: 0 12px 32px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --thumb-bg: rgba(255, 255, 255, 0.22); /* 选中滑块底色 */
+    --thumb-lens: rgba(255, 255, 255, 0.1); /* 按住时的透镜底色（更透） */
+    --glow: rgba(255, 255, 255, 0.26); /* 触摸发光 */
+    --label-glow: 0 0 8px rgba(0, 0, 0, 0.6), 0 0 2px rgba(0, 0, 0, 0.4); /* 文字光晕：背后内容透出来时也看得清 */
+    --icon-glow: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55));
   }
   html.standalone[data-theme='light'] {
-    --glass-tint: rgba(255, 255, 255, 0.68);
-    --glass-solid: rgba(255, 255, 255, 0.95);
-    --glass-edge: rgba(255, 255, 255, 0.8);
-    --glass-hi: rgba(255, 255, 255, 0.95);
-    --glass-pill: rgba(15, 23, 42, 0.07);
-    --glass-shadow: 0 12px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.08), 0 0 0 0.5px rgba(15, 23, 42, 0.08);
-    /* 浅色玻璃少提一点饱和度：否则下面的红绿色块会把整条导航染上颜色 */
-    --glass-filter: blur(22px) saturate(150%) brightness(1.04);
+    /* 浅色（与选号页浅色模式同值） */
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-blur: blur(4px) saturate(140%) brightness(1.02);
+    --glass-spec: radial-gradient(120% 85% at 18% 0%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 55%);
+    --glass-rim: linear-gradient(140deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.42) 20%, rgba(255, 255, 255, 0.22) 42%, rgba(255, 255, 255, 0.22) 62%, rgba(255, 255, 255, 0.42) 82%, rgba(255, 255, 255, 0.9));
+    --glass-border: rgba(15, 23, 42, 0.16);
+    --glass-edge: 0 0 0.5px rgba(15, 23, 42, 0.3), 0 0 0.5px rgba(15, 23, 42, 0.3), 0 0 2px rgba(15, 23, 42, 0.1);
+    --glass-inset:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.6),
+      inset -2px -2px 4px rgba(255, 255, 255, 0.4),
+      inset 0 0 16px rgba(255, 255, 255, 0.2);
+    --glass-drop: 0 12px 32px rgba(31, 41, 95, 0.14), 0 2px 6px rgba(31, 41, 95, 0.08);
+    --thumb-bg: rgba(255, 255, 255, 0.88);
+    --thumb-lens: rgba(255, 255, 255, 0.4);
+    --glow: rgba(255, 255, 255, 0.8);
+    --label-glow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 2px rgba(255, 255, 255, 0.6);
+    --icon-glow: drop-shadow(0 0 3px rgba(255, 255, 255, 0.85));
   }
+
+  /* 玻璃本体：几乎全透 + 轻度模糊；不用扩散值的阴影（Safari 26 遇到大圆角 + 扩散值会画出方形色块） */
   html.standalone .tabbar {
     left: 0;
     right: 0;
@@ -2637,54 +2666,124 @@ select,
     margin: 0 auto;
     height: var(--glass-h);
     padding: 4px;
-    border: 1px solid var(--glass-edge);
+    isolation: isolate; /* 触摸发光层留在玻璃里、文字下面 */
+    border: 0.5px solid var(--glass-border);
     border-radius: calc(var(--glass-h) / 2);
-    background: var(--glass-solid);
-    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+    background: var(--glass-spec), var(--glass-bg);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-inset), var(--glass-drop);
   }
-  @supports (backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px)) {
-    html.standalone .tabbar {
-      background: var(--glass-tint);
-      -webkit-backdrop-filter: var(--glass-filter);
-      backdrop-filter: var(--glass-filter);
-    }
+  /* 边缘折射（glass-refraction.js 只在支持的浏览器里加上 .refract）：先弯折背后内容，再轻度模糊 */
+  html.standalone .tabbar.refract {
+    -webkit-backdrop-filter: url(#tabbar-refraction) var(--glass-blur);
+    backdrop-filter: url(#tabbar-refraction) var(--glass-blur);
   }
-  /* 玻璃表面的高光：上沿亮、往下渐隐 */
-  html.standalone .tabbar::after {
+  /* 高光描边：渐变铺在 1.5px 的内边距上，两层遮罩相减只留下一圈；左上、右下最亮 */
+  html.standalone .tabbar::before,
+  html.standalone .tab-thumb::before {
     content: '';
     position: absolute;
     top: 0;
     right: 0;
     bottom: 0;
     left: 0;
-    z-index: 1;
     border-radius: inherit;
+    padding: var(--rim-w);
+    background: var(--glass-rim);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
     pointer-events: none;
-    background:
-      radial-gradient(120% 70% at 50% -20%, rgba(255, 255, 255, 0.16), transparent 60%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 45%);
   }
-  /* 当前标签下的玻璃胶囊：随 --tab-i（由 mobile-nav.js 设置）滑到对应位置 */
-  html.standalone .tabbar::before {
+  /* 触摸发光：以手指位置为中心的光晕（--lx / --ly 由 mobile-nav.js 设置），松手后淡出 */
+  html.standalone .tabbar::after,
+  html.standalone .tab-thumb::after {
     content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(circle var(--glow-size, 90px) at var(--lx, 50%) var(--ly, 50%), var(--glow), transparent);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+  }
+  html.standalone .tabbar::after {
+    --glow-size: 150px;
+  }
+  html.standalone .tabbar.lit::after {
+    opacity: 0.55;
+    transition-duration: 0.15s;
+  }
+  html.standalone .tab-thumb.lit::after {
+    opacity: 1;
+    transition-duration: 0.15s;
+  }
+
+  /* 选中滑块：实一些的玻璃，随 --tab-i 滑到当前标签下，带回弹 */
+  html.standalone .tab-thumb {
+    display: block;
     position: absolute;
     top: 4px;
     bottom: 4px;
     left: 4px;
-    z-index: 0;
     width: calc((100% - 8px) / 4);
     border-radius: calc(var(--glass-h) / 2 - 4px);
-    background: var(--glass-pill);
-    box-shadow: inset 0 1px 0 var(--glass-hi);
-    transform: translateX(calc(var(--tab-i, 0) * 100%));
-    transition: transform 0.38s cubic-bezier(0.3, 1.35, 0.5, 1);
+    isolation: isolate;
+    background-image: var(--glass-spec);
+    background-color: var(--thumb-bg);
+    box-shadow:
+      var(--glass-edge),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 3px 10px rgba(0, 0, 0, 0.12),
+      0 1px 2px rgba(0, 0, 0, 0.08);
+    translate: calc(var(--tab-i, 0) * 100%) 0;
+    scale: var(--thumb-s, 1);
+    transition:
+      translate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+      scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 0.25s,
+      box-shadow 0.25s;
   }
+  @supports not (translate: 0) {
+    html.standalone .tab-thumb {
+      transform: translateX(calc(var(--tab-i, 0) * 100%)) scale(var(--thumb-s, 1));
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.25s;
+    }
+  }
+  /* 切换标签时的液态拉伸 */
+  @supports (translate: 0) {
+    html.standalone .tab-thumb.morph {
+      animation: tab-morph 0.55s ease;
+    }
+  }
+  /* 按住导航时：滑块放大 1.1 倍、底色更透，像一块透镜 */
+  html.standalone .tabbar.pressing .tab-thumb {
+    --thumb-s: 1.1;
+    background-color: var(--thumb-lens);
+    box-shadow:
+      var(--glass-edge),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.55),
+      inset -2px -2px 4px rgba(255, 255, 255, 0.4),
+      0 8px 20px rgba(0, 0, 0, 0.16);
+  }
+
   html.standalone .tabbar button {
     z-index: 2;
     border-radius: calc(var(--glass-h) / 2 - 4px);
+    text-shadow: var(--label-glow);
+  }
+  html.standalone .tabbar svg {
+    filter: var(--icon-glow);
   }
   html.standalone .tabbar .badge {
     top: 3px;
+    text-shadow: none;
   }
   /* 提醒页铺到屏幕底部，列表从玻璃下面透过；末尾留白，最后一条能滚到玻璃上方 */
   html.standalone .drawer,
@@ -2695,6 +2794,20 @@ select,
     padding-bottom: var(--tabbar-space);
   }
 }
+@keyframes tab-morph {
+  0% {
+    transform: none;
+  }
+  35% {
+    transform: scale(1.1, 0.9);
+  }
+  70% {
+    transform: scale(0.98, 1.03);
+  }
+  100% {
+    transform: none;
+  }
+}
 /* 横屏：导航矮一些、窄一些，居中 */
 @media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
   html.standalone {
@@ -2703,7 +2816,7 @@ select,
     --glass-max: 460px;
   }
 }
-/* 系统要求减少动态效果时，玻璃胶囊不滑动：由文末全局的 prefers-reduced-motion 规则统一处理（含 ::before） */
+/* 系统要求减少动态效果时，滑块不滑动、不拉伸：由文末全局的 prefers-reduced-motion 规则统一处理 */
 
 .btn {
   white-space: nowrap;

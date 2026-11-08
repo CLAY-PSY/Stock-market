@@ -24,12 +24,50 @@ export function initMobileNav({ hasInitialSymbol }) {
   let openSheetName = null;
   const listeners = new Set();
 
+  /* ---------------------------------------- 主屏幕 App 液体玻璃导航（外观见 CSS .tab-thumb） */
+  const thumb = tabbar.querySelector('.tab-thumb');
+  let thumbIndex = null;
+  // 切换标签时滑块带回弹滑过去，同时播放一次液态拉伸
+  const moveThumb = (i) => {
+    if (i === thumbIndex) return;
+    const first = thumbIndex === null;
+    thumbIndex = i;
+    tabbar.style.setProperty('--tab-i', String(i));
+    if (first || !thumb) return;
+    thumb.classList.remove('morph');
+    void thumb.offsetWidth; // 读一次布局，才能重新播放动画
+    thumb.classList.add('morph');
+  };
+  thumb?.addEventListener('animationend', () => thumb.classList.remove('morph'));
+
+  // 按住导航：滑块变成透镜（放大、更透）；手指处的触摸发光跟着手指走，并带亮整条玻璃
+  const lit = [tabbar, thumb].filter(Boolean);
+  const placeGlow = (e) => {
+    for (const el of lit) {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--lx', `${e.clientX - r.left}px`);
+      el.style.setProperty('--ly', `${e.clientY - r.top}px`);
+    }
+  };
+  const release = () => {
+    tabbar.classList.remove('pressing');
+    lit.forEach((el) => el.classList.remove('lit'));
+    document.removeEventListener('pointermove', placeGlow);
+  };
+  tabbar.addEventListener('pointerdown', (e) => {
+    placeGlow(e);
+    tabbar.classList.add('pressing');
+    lit.forEach((el) => el.classList.add('lit'));
+    document.addEventListener('pointermove', placeGlow, { passive: true });
+  });
+  document.addEventListener('pointerup', release);
+  document.addEventListener('pointercancel', release);
+
   const syncTabs = () => {
     $$('button', tabbar).forEach((b, i) => {
       const active = openSheetName === 'alerts' ? b.dataset.view === 'alerts' : b.dataset.view === view;
       b.setAttribute('aria-current', active ? 'page' : 'false');
-      // 主屏幕 App 的液体玻璃导航：当前标签下的玻璃胶囊按这个序号滑过去（见 CSS .tabbar::before）
-      if (active) tabbar.style.setProperty('--tab-i', String(i));
+      if (active) moveThumb(i);
     });
   };
 

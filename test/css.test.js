@@ -138,14 +138,23 @@ test('手机上成交明细到一定高度后在框内滑动（不把整页拉�
   assert.doesNotMatch(mobile, /\.tick:nth-child\(n \+ \d+\)\s*\{\s*display:\s*none/, '不要再隐藏第 31 行以后的成交');
 });
 
-test('主屏幕 App 的液体玻璃底部导航：悬浮胶囊、毛玻璃、滑动的选中胶囊，内容可滚到玻璃上方', () => {
+test('主屏幕 App 的液体玻璃底部导航（与选号页同款材质）：通透玻璃、高光描边、透镜滑块，内容可滚到玻璃上方', () => {
   const rules = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
   assert.match(rules, /html\.standalone \{[^}]*--tabbar-space:\s*calc\(var\(--glass-bottom\) \+ var\(--glass-h\) \+ 10px\)/, '内容底部留白要算上悬浮导航');
-  assert.match(rules, /html\.standalone \.tabbar \{[^}]*border-radius:\s*calc\(var\(--glass-h\) \/ 2\)/, '胶囊形');
-  assert.match(rules, /--glass-filter:\s*blur\(22px\)/, '毛玻璃');
-  assert.match(rules, /html\.standalone \.tabbar \{[^}]*backdrop-filter:\s*var\(--glass-filter\)/, '毛玻璃');
-  assert.match(rules, /html\.standalone \.tabbar::before \{[^}]*translateX\(calc\(var\(--tab-i, 0\) \* 100%\)\)/, '选中胶囊随当前标签滑动');
+  // 通透：几乎全透的底色 + 轻度模糊（深色 8%、浅色 3%；模糊 5px / 4px）
+  assert.match(rules, /--glass-bg:\s*rgba\(20, 22, 40, 0\.08\)/);
+  assert.match(rules, /--glass-bg:\s*rgba\(255, 255, 255, 0\.03\)/);
+  assert.match(rules, /--glass-blur:\s*blur\(5px\) saturate\(140%\)/);
+  assert.match(rules, /--glass-blur:\s*blur\(4px\) saturate\(140%\) brightness\(1\.02\)/);
+  assert.match(rules, /html\.standalone \.tabbar \{[^}]*border-radius:\s*calc\(var\(--glass-h\) \/ 2\)[^}]*backdrop-filter:\s*var\(--glass-blur\)/s, '胶囊形毛玻璃');
+  // 高光描边：渐变 + 两层遮罩相减成一圈
+  assert.match(rules, /html\.standalone \.tabbar::before,\s*html\.standalone \.tab-thumb::before \{[^}]*background:\s*var\(--glass-rim\)[^}]*mask-composite/s);
+  // 选中滑块：随当前标签滑动，按住时放大成透镜
+  assert.match(rules, /html\.standalone \.tab-thumb \{[^}]*translate:\s*calc\(var\(--tab-i, 0\) \* 100%\) 0/s);
+  assert.match(rules, /html\.standalone \.tabbar\.pressing \.tab-thumb \{[^}]*--thumb-s:\s*1\.1/s);
   assert.match(rules, /html\.standalone \.alert-list \{[^}]*padding-bottom:\s*var\(--tabbar-space\)/, '提醒列表最后一条能滚到玻璃上方');
+  // 浏览器里不显示滑块
+  assert.ok(topLevelRules(css).some((r) => r.prelude === '.tab-thumb' && /display:\s*none/.test(r.body)));
   // 其它地方都按 --tabbar-space 计算，不再直接用导航高度 + 安全区（否则悬浮导航下会被遮住）
   const uses = css.match(/calc\(var\(--tabbar-h\) \+ var\(--safe-bottom\)\)/g) ?? [];
   assert.equal(uses.length, 2, '只有变量定义和普通底部导航自身的高度直接用 --tabbar-h + --safe-bottom');
