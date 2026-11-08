@@ -2602,10 +2602,12 @@ select,
  * 材质与交互照搬「双色球 / 大乐透 随机选号」页（clay-psy.github.io/Lottery-generator）的液体玻璃：
  * 透明玻璃：几乎无色、不模糊（背后的内容和不隔玻璃时一样清楚），靠高光描边、深色细边和内侧透镜光带勾出轮廓；
  * 选中滑块是一块实一些的玻璃，切换时带回弹滑过去并有液态拉伸，按住时放大变透、像透镜；手指处有触摸发光。
- * 折射：支持 backdrop-filter: url() 的浏览器（Chrome 等）由 glass-refraction.js 加上边缘透镜折射与色散；
- * Safari 暂不支持（WebKit bug 245510），只有材质与高光。只在主屏幕 App（html.standalone）里启用。
+ * 折射（glass-refraction.js）：边缘透镜折射与色散。Chrome 等用 backdrop-filter: url() 直接弯折背后的页面；
+ * iPhone Safari 不支持这种写法（WebKit bug 245510），改为在导航正下方放一层与页面对齐的实时副本（.tab-mirror），
+ * 对它用 filter: url() 折射。只在主屏幕 App（html.standalone）里启用。
  */
-.tab-thumb {
+.tab-thumb,
+.tab-mirror {
   display: none;
 }
 /* 透镜的位置、大小、放大倍数注册成可插值的变量：滑块、透镜里的放大副本都由它们算出，过渡时始终对齐。
@@ -2867,6 +2869,61 @@ select,
   }
   html.standalone .alert-list {
     padding-bottom: var(--tabbar-space);
+  }
+
+  /* iPhone Safari 的折射层：与导航同样大小、同样位置，紧贴在它下面（导航 45，提醒页 42），
+     里面是对齐的页面副本，由 glass-refraction.js 套上折射滤镜；导航自己的高光、描边、滑块照常画在上面 */
+  html.standalone .tab-mirror {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--glass-bottom);
+    z-index: 44;
+    width: min(var(--glass-max), calc(100% - 2 * var(--glass-side)));
+    height: var(--glass-h);
+    margin: 0 auto;
+    border-radius: calc(var(--glass-h) / 2);
+    -webkit-clip-path: inset(0 round calc(var(--glass-h) / 2));
+    clip-path: inset(0 round calc(var(--glass-h) / 2));
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  html.standalone .tab-mirror[hidden] {
+    display: none;
+  }
+  .tab-mirror-clip {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    contain: strict;
+  }
+  .tab-mirror-viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--bg);
+  }
+  .app.tab-mirror-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+  }
+  /* 副本是静止的画面：不重播动画；吸顶的标题栏留在原位（它在屏幕顶上，永远不会到导航后面） */
+  .tab-mirror *,
+  .tab-mirror *::before,
+  .tab-mirror *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .tab-mirror .topbar {
+    position: relative !important;
+    top: auto !important;
   }
 }
 @keyframes tab-morph {

@@ -164,11 +164,34 @@ test('主屏幕 App 的液体玻璃底部导航（与选号页同款材质）：
     assert.ok(topLevelRules(css).some((r) => r.prelude === `@property ${name}`), `缺少 @property ${name}`);
   }
   assert.match(rules, /html\.standalone \.alert-list \{[^}]*padding-bottom:\s*var\(--tabbar-space\)/, '提醒列表最后一条能滚到玻璃上方');
-  // 浏览器里不显示滑块
-  assert.ok(topLevelRules(css).some((r) => r.prelude === '.tab-thumb' && /display:\s*none/.test(r.body)));
+  // 浏览器里不显示滑块和 iPhone 的折射层
+  assert.ok(topLevelRules(css).some((r) => /^\.tab-thumb,\s*\.tab-mirror$/.test(r.prelude) && /display:\s*none/.test(r.body)));
   // 其它地方都按 --tabbar-space 计算，不再直接用导航高度 + 安全区（否则悬浮导航下会被遮住）
   const uses = css.match(/calc\(var\(--tabbar-h\) \+ var\(--safe-bottom\)\)/g) ?? [];
   assert.equal(uses.length, 2, '只有变量定义和普通底部导航自身的高度直接用 --tabbar-h + --safe-bottom');
+});
+
+test('iPhone Safari 的折射层：与导航同位置同大小、紧贴在导航下面，副本静止、不重播动画', () => {
+  const rules = topLevelRules(css).filter((r) => r.prelude === '@media (max-width: 899px)').map((r) => r.body).join('\n');
+  const box = rules.match(/html\.standalone \.tab-mirror \{([^}]*)\}/)?.[1] ?? '';
+  const bar = rules.match(/html\.standalone \.tabbar \{([^}]*)\}/)?.[1] ?? '';
+  // 位置、大小与导航用同一组变量
+  for (const prop of ['bottom', 'width', 'height', 'border-radius']) {
+    const a = box.match(new RegExp(`(?:^|[\\s;])${prop}:\\s*([^;]+);`))?.[1];
+    const b = bar.match(new RegExp(`(?:^|[\\s;])${prop}:\\s*([^;]+);`))?.[1];
+    assert.ok(a && a === b, `${prop}：折射层 ${a} / 导航 ${b}`);
+  }
+  assert.match(box, /position:\s*fixed/);
+  assert.match(box, /pointer-events:\s*none/, '不挡触摸');
+  assert.match(box, /clip-path:\s*inset\(0 round calc\(var\(--glass-h\) \/ 2\)\)/, '裁成胶囊形');
+  // 层级：导航（45）之下，提醒页（42）、遮罩（41）、顶栏（40）之上
+  const z = Number(box.match(/z-index:\s*(\d+)/)?.[1]);
+  const zOf = (sel) => Number(rules.match(new RegExp(`\\n\\s*${sel} \\{[^}]*z-index:\\s*(\\d+)`))?.[1]);
+  assert.equal(zOf('\\.tabbar'), 45);
+  assert.ok(z < 45 && z > zOf('\\.drawer') && z > zOf('\\.scrim'), `折射层 z-index ${z}`);
+  assert.match(rules, /\.tab-mirror-clip \{[^}]*overflow:\s*hidden/s, '滤镜输入裁到导航大小');
+  assert.match(rules, /\.tab-mirror \*,\s*\.tab-mirror \*::before,\s*\.tab-mirror \*::after \{[^}]*animation:\s*none !important[^}]*transition:\s*none !important/s);
+  assert.match(rules, /\.tab-mirror \.topbar \{[^}]*position:\s*relative !important/s, '副本里的标题栏不吸顶');
 });
 
 test('横屏底部导航的「提醒」角标不盖住文字（图标与文字左右排列时，角标右边缘固定在文字左侧）', () => {
