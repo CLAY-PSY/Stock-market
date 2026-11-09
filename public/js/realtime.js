@@ -97,9 +97,15 @@ export class RealtimeClient {
     this.reconnectTimer = setTimeout(() => this.connect(), this.retryIn);
   }
 
-  /** 网络恢复 / 页面重新可见时立即重连，不等退避计时 */
+  /**
+   * 网络恢复 / 页面重新可见时立即重连，不等退避计时。
+   * 连接看起来还开着时立即发一次心跳：手机切后台期间连接可能已经断了（半开连接），10 秒内没回应就重连
+   */
   reconnectNow() {
-    if (this.state === 'open') return;
+    if (this.state === 'open') {
+      this.ping();
+      return;
+    }
     this.retry = 0;
     this.connect();
   }

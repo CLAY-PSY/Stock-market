@@ -1,8 +1,10 @@
 import { $, $$, h, activatable, trackOnScreen } from '../dom.js';
+import { withDeadline } from '../../shared/deadline.js';
 import { api, capabilities } from '../api.js';
 import { store } from '../store.js';
 import { fmtPrice, fmtPct, fmtBig, fmtNum, trend, displayCode } from '../format.js';
 
+const REQUEST_DEADLINE_MS = 15_000;
 const METRIC = {
   changePct: (r) => ({ text: fmtPct(r.changePct), dir: trend(r.changePct) }),
   amount: (r) => ({ text: fmtBig(r.amount), dir: '' }),
@@ -83,7 +85,8 @@ export function initRank({ onPick }) {
   const schedule = () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
-      if (!document.hidden && onScreen()) await load();
+      // 加截止时间：请求挂住（手机切后台后可能发生）时放弃它，轮询照常继续
+      if (!document.hidden && onScreen()) await withDeadline(load(), REQUEST_DEADLINE_MS).catch(() => ctrl?.abort());
       schedule();
     }, interval());
   };

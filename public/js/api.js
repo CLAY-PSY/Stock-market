@@ -50,9 +50,18 @@ async function request(path, { timeout = 12_000, signal } = {}) {
 }
 
 /** 直连模式下统一错误类型，并在调用方取消时丢弃结果 */
+/** 取消信号触发时立即结束等待（直连的数据源不认识取消信号，挂住的请求不会自己结束） */
+function untilAborted(signal) {
+  return new Promise((_, reject) => {
+    const abort = () => reject(new DOMException('aborted', 'AbortError'));
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
 async function viaDirect(fn, signal) {
   try {
-    const result = await fn();
+    const result = await (signal ? Promise.race([fn(), untilAborted(signal)]) : fn());
     if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
     return result;
   } catch (err) {
