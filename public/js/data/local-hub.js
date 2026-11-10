@@ -98,11 +98,12 @@ export class LocalRealtime {
 
   /**
    * 回到前台 / 网络恢复 / 页面从缓存恢复：立即刷新一次。
-   * 手机切走期间页面被挂起，回来时上一轮请求可能还挂着，先把它放弃掉
+   * 手机切走期间页面被挂起，回来时上一轮请求可能还挂着（不管它是刚发出还是发出很久了），
+   * 直接放弃它、马上重新请求；它之后即使返回，旧结果也不会覆盖新结果
    */
   reconnectNow() {
     if (!this.running) return this.connect();
-    if (this.ticking && Date.now() - this.roundStartedAt > this.interval) this.abandonRound();
+    if (this.ticking) this.abandonRound();
     this.refreshMarket();
     this.schedule(0);
     return undefined;
