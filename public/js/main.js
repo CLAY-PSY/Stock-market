@@ -212,11 +212,16 @@ store.on('subscriptions', () => rt.setSymbols(store.subscriptionSet()));
 rt.setSymbols(store.subscriptionSet());
 rt.connect();
 
-// 网络恢复、切回前台、页面从缓存恢复（手机上切回浏览器 / 主屏幕 App）：立即刷新行情
+// 网络恢复、切回前台、页面从缓存恢复（手机上切回浏览器 / 主屏幕 App、返回上一页）：立即刷新行情。
+// 切走 / 离开 / 被冻结时先告诉连接：这段时间里没返回的请求，延迟与失败不算数
+const suspend = () => rt.suspend();
 window.addEventListener('online', () => rt.reconnectNow());
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) rt.reconnectNow();
+  if (document.hidden) suspend();
+  else rt.reconnectNow();
 });
+window.addEventListener('pagehide', suspend);
+document.addEventListener('freeze', suspend);
 window.addEventListener('pageshow', (e) => {
   if (e.persisted) rt.reconnectNow();
 });

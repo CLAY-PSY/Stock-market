@@ -156,3 +156,107 @@ test('withDeadline：到点没结果就按超时失败，正常结果原样返�
   await assert.rejects(withDeadline(never(), 30), /超时/);
   assert.equal(await withDeadline(Promise.resolve(7), 30), 7);
 });
+
+/* ---------------------------------- 页面切走 / 离开（往返缓存）期间没返回的请求 */
+
+/** 第一次报价请求由测试手动结束（模拟页面切走时它还没返回） */
+function controlledProvider() {
+  let calls = 0;
+  let price = 100;
+  const pending = {};
+  pending.promise = new Promise((resolve, reject) => Object.assign(pending, { resolve, reject }));
+  const quotes = (symbols, p) => new Map(symbols.map((s) => [s, { symbol: s, price: p, volume: p, time: `2026-11-10 10:00:${String(p % 60).padStart(2, '0')}`, bids: [], asks: [] }]));
+  return {
+    name: 'fake',
+    label: 'fake',
+    pending,
+    quotes,
+    async getQuotes(symbols) {
+      calls += 1;
+      if (calls === 1) return pending.promise.then(() => quotes(symbols, 1));
+      price += 1;
+      return quotes(symbols, price);
+    },
+    async getMarketStatus() {
+      return OPEN;
+    },
+  };
+}
+
+test('页面切走时还没返回的请求：回来后才返回，不把停住的时间当成延迟显示', async () => {
+  const p = controlledProvider();
+  const rt = new LocalRealtime(p, { interval: 20, idleInterval: 50, marketInterval: 5_000, requestDeadline: 60_000, watchdog: 60_000 });
+  const latencies = [];
+  rt.on('latency', (ms) => latencies.push(ms));
+  rt.setSymbols(['sh600519']);
+  rt.connect();
+  try {
+    await wait(20);
+    rt.suspend(); // 页面切走 / 进入往返缓存
+    await wait(250); // 页面停住了一段时间
+    p.pending.resolve(); // 回来后，那个请求才返回
+    await wait(10);
+    assert.ok(latencies.every((ms) => ms < 200), `不应出现包含停住时间的延迟，实际 ${latencies.join(', ')}`);
+    rt.reconnectNow();
+    await wait(120);
+    assert.ok(latencies.length >= 1 && latencies.every((ms) => ms < 200), `回来后的新请求正常测出延迟：${latencies.join(', ')}`);
+  } finally {
+    rt.close();
+  }
+});
+
+test('页面切走时还没返回的请求失败了（浏览器离开页面时取消）：状态不变成「重连中」，也不提示数据源不可用', async () => {
+  const p = controlledProvider();
+  const rt = new LocalRealtime(p, { interval: 20, idleInterval: 50, marketInterval: 5_000, requestDeadline: 60_000, watchdog: 60_000 });
+  const states = [];
+  const upstream = [];
+  rt.on('state', (s) => states.push(s.state));
+  rt.on('upstream', (m) => upstream.push(m.ok));
+  rt.setSymbols(['sh600519']);
+  rt.connect();
+  try {
+    await wait(20);
+    rt.suspend();
+    p.pending.reject(new Error('Load failed'));
+    await wait(10);
+    assert.ok(!states.includes('reconnecting'), `状态：${states.join(' → ')}`);
+    assert.deepEqual(upstream, [], '没有「数据源不可用」提示');
+    rt.reconnectNow();
+    await wait(120);
+    assert.equal(rt.state, 'open');
+  } finally {
+    rt.close();
+  }
+});
+
+test('返回上一页时 pageshow 和 visibilitychange 接连触发：只重新请求一次', async () => {
+  let calls = 0;
+  const provider = {
+    name: 'fake',
+    label: 'fake',
+    async getQuotes(symbols) {
+      calls += 1;
+      await wait(30);
+      return new Map(symbols.map((s) => [s, { symbol: s, price: calls, volume: calls, time: `t${calls}`, bids: [], asks: [] }]));
+    },
+    async getMarketStatus() {
+      return OPEN;
+    },
+  };
+  const rt = new LocalRealtime(provider, { interval: 1000, idleInterval: 1000, marketInterval: 5_000, requestDeadline: 60_000, watchdog: 60_000 });
+  rt.setSymbols(['sh600519']);
+  rt.connect();
+  try {
+    await wait(80); // 第一轮结束，下一轮要 1 秒后
+    const before = calls;
+    rt.suspend();
+    rt.lastFetch.clear(); // 离开了很久，回来时数据已经过期
+    rt.reconnectNow(); // pageshow
+    await wait(5);
+    rt.reconnectNow(); // visibilitychange
+    await wait(80);
+    assert.equal(calls - before, 1, `只应重新请求一次，实际 ${calls - before} 次`);
+  } finally {
+    rt.close();
+  }
+});
