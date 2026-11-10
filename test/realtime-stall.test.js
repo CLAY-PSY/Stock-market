@@ -83,6 +83,18 @@ test('切回前台（reconnectNow）时立即放弃挂住的一轮，不用等�
   }
 });
 
+test('请求刚发出就挂住、紧接着切回前台：同样马上重新请求', async () => {
+  const { rt, got } = start(fakeProvider({ first: 'hang' }), { interval: 3000, requestDeadline: 60_000, watchdog: 60_000 });
+  try {
+    await wait(30); // 挂住的请求才发出 30 毫秒，远小于轮询间隔
+    rt.reconnectNow();
+    await wait(150);
+    assert.ok(got.length >= 1, `切回前台后马上拉到报价，实际 ${got.length} 次`);
+  } finally {
+    rt.close();
+  }
+});
+
 test('被放弃的请求迟到返回时，旧价格不覆盖已经显示的新价格', async () => {
   const { rt, got } = start(fakeProvider({ first: 'late' }), { requestDeadline: 60_000, watchdog: 60_000 });
   try {
