@@ -10,6 +10,7 @@ export class RealtimeClient {
     this.state = 'idle';
     this.latency = null;
     this.lastMessageAt = 0;
+    this.suspendedAt = 0;
   }
 
   on(type, fn) {
@@ -67,6 +68,8 @@ export class RealtimeClient {
       }
       if (msg.type === 'pong') {
         clearTimeout(this.pongTimer);
+        // 页面切走前发出的心跳：往返时间里包含页面停住的时间，不是网络延迟
+        if (msg.t < this.suspendedAt) return;
         this.latency = Date.now() - msg.t;
         this.emit('latency', this.latency);
         return;
@@ -95,6 +98,15 @@ export class RealtimeClient {
     this.emit('state', { state: 'reconnecting', retryIn: this.retryIn });
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => this.connect(), this.retryIn);
+  }
+
+  /**
+   * 页面切到后台 / 离开 / 被冻结：停掉心跳超时计时。否则页面停住的时间也算进等待回应的 10 秒，
+   * 回来时会误判连接已失效而断开重连（指示灯闪成「重连中」）。回来后 reconnectNow 会立即重新检查
+   */
+  suspend() {
+    this.suspendedAt = Date.now();
+    clearTimeout(this.pongTimer);
   }
 
   /**

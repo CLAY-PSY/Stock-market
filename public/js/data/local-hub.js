@@ -39,6 +39,8 @@ export class LocalRealtime {
     this.watchdogInterval = watchdog;
     this.round = 0; // 轮询的轮次：卡住的一轮被放弃后，它迟到的收尾不再影响后面的轮询
     this.reqSeq = 0; // 请求序号：迟到的旧结果不覆盖已经显示的新结果
+    this.epoch = 0; // 页面每切到后台 / 离开一次加 1：跨过这段时间的请求，延迟和失败都不可信
+    this.lastResumeAt = 0;
     this.okSeq = 0;
     this.appliedSeq = new Map();
     this.roundStartedAt = 0;
@@ -103,10 +105,23 @@ export class LocalRealtime {
    */
   reconnectNow() {
     if (!this.running) return this.connect();
+    // 从往返缓存恢复时 pageshow 与 visibilitychange 会接连触发，只处理一次
+    const now = Date.now();
+    if (now - this.lastResumeAt < 500) return undefined;
+    this.lastResumeAt = now;
     if (this.ticking) this.abandonRound();
     this.refreshMarket();
     this.schedule(0);
     return undefined;
+  }
+
+  /**
+   * 页面切到后台 / 离开（进入往返缓存）/ 被系统冻结。此时还没返回的请求，
+   * 回来后测出的「延迟」包含了页面停住的时间（会显示成几秒甚至更久），
+   * 它失败也多半是浏览器离开页面时取消了它，并不是行情接口出了问题：都不计入连接状态
+   */
+  suspend() {
+    this.epoch += 1;
   }
 
   /** 停止轮询 */
@@ -204,12 +219,14 @@ export class LocalRealtime {
   async fetch(symbols, { snapshot = false } = {}) {
     this.reqSeq += 1;
     const seq = this.reqSeq;
+    const epoch = this.epoch;
     const started = Date.now();
     let quotes;
     try {
       quotes = await withDeadline(this.provider.getQuotes(symbols), this.requestDeadline);
     } catch (err) {
       if (seq < this.okSeq) return; // 之后发出的请求已经成功，这次迟到的失败不算
+      if (epoch !== this.epoch) return; // 发出后页面切走过：多半是浏览器取消了它，回来后会马上重新请求
       this.failures += 1;
       if (this.upstreamOk) {
         this.upstreamOk = false;
@@ -220,8 +237,11 @@ export class LocalRealtime {
       return;
     }
     this.okSeq = Math.max(this.okSeq, seq);
-    this.latency = Date.now() - started;
-    this.emit('latency', this.latency);
+    if (epoch === this.epoch) {
+      // 跨过后台 / 离开的请求不更新延迟：那段时间页面停住了，测出来的不是网络延迟
+      this.latency = Date.now() - started;
+      this.emit('latency', this.latency);
+    }
     if (!this.upstreamOk) {
       this.upstreamOk = true;
       this.emit('upstream', { type: 'upstream', ok: true });
