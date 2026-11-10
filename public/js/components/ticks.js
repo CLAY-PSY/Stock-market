@@ -1,4 +1,5 @@
 import { $, h, trackOnScreen } from '../dom.js';
+import { withDeadline } from '../../shared/deadline.js';
 import { api } from '../api.js';
 import { store } from '../store.js';
 import { fmtPrice, fmtLots, trendVs, marketOf } from '../format.js';
@@ -7,6 +8,7 @@ const MAX_ROWS = 80;
 // 沪市 000xxx、深市 399xxx 为指数代码
 const isCnIndex = (symbol) => /^(sh000|sz399)/.test(symbol);
 const POLL_MS = 3000;
+const REQUEST_DEADLINE_MS = 15_000;
 
 /**
  * 成交明细。
@@ -94,7 +96,8 @@ export function initTicks() {
     clearTimeout(timer);
     if (!pollable()) return;
     timer = setTimeout(async () => {
-      if (!document.hidden && onScreen()) await fetchTicks();
+      // 加截止时间：请求挂住（手机切后台后可能发生）时放弃它，轮询照常继续
+      if (!document.hidden && onScreen()) await withDeadline(fetchTicks(), REQUEST_DEADLINE_MS).catch(() => ctrl?.abort());
       schedule();
     }, interval());
   };

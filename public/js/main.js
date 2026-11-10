@@ -212,9 +212,13 @@ store.on('subscriptions', () => rt.setSymbols(store.subscriptionSet()));
 rt.setSymbols(store.subscriptionSet());
 rt.connect();
 
+// 网络恢复、切回前台、页面从缓存恢复（手机上切回浏览器 / 主屏幕 App）：立即刷新行情
 window.addEventListener('online', () => rt.reconnectNow());
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) rt.reconnectNow();
+});
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) rt.reconnectNow();
 });
 
 /* WebSocket 不可用（例如被公司代理拦截）时，自动降级为 HTTP 轮询，保证页面仍在更新 */
