@@ -9,7 +9,9 @@ const html = read('index.html');
 const css = read('css/app.css').replace(/\/\*[\s\S]*?\*\//g, '');
 const script = read('js/splash.js');
 
-test('开屏页紧跟在 <body> 后面，进度脚本紧跟开屏页同步执行，主程序之前；壁纸只在窄屏预加载', () => {
+const MEDIA = '(max-width: 899px), (pointer: coarse)'; // 手机 / 平板：窄屏，或以触屏为主的设备
+
+test('开屏页紧跟在 <body> 后面，进度脚本紧跟开屏页同步执行，主程序之前；壁纸只在手机 / 平板上预加载', () => {
   const body = html.indexOf('<body>');
   const splash = html.indexOf('<div class="splash" id="splash"');
   const splashJs = html.indexOf('<script src="js/splash.js"></script>');
@@ -17,18 +19,22 @@ test('开屏页紧跟在 <body> 后面，进度脚本紧跟开屏页同步执行
   const main = html.indexOf('<script type="module" src="js/main.js"></script>');
   assert.ok(body < splash && splash < splashJs && splashJs < app && app < main, '顺序：body → 开屏页 → splash.js → 页面 → main.js');
   assert.match(html, /<div class="splash" id="splash" aria-hidden="true">/);
-  assert.match(html, /<link rel="preload" href="images\/splash\.jpg" as="image" media="\(max-width: 899px\)" \/>/);
+  assert.ok(html.includes(`<link rel="preload" href="images/splash.jpg" as="image" media="${MEDIA}" />`));
   // 开屏期间的状态栏颜色：写在 <head> 里、排在其它 theme-color 前面（第一帧就生效），只对窄屏生效
   const metas = [...html.matchAll(/<meta name="theme-color"[^>]*>/g)].map((m) => m[0]);
-  assert.match(metas[0], /id="theme-color-splash" media="\(max-width: 899px\)" content="#01122f"/);
+  assert.ok(metas[0].includes(`id="theme-color-splash" media="${MEDIA}" content="#01122f"`), metas[0]);
+  // 显示条件三处一致：页面 media、CSS、splash.js
+  assert.ok(script.includes(`matchMedia('${MEDIA}')`));
+  assert.ok(css.includes(`@media ${MEDIA} {\n  .splash {`));
+  assert.ok(existsSync(new URL('../public/images/splash-bg.jpg', import.meta.url)));
   // boot.js 手动主题时改写 theme-color，不能把开屏的颜色也改掉
   assert.match(read('js/boot.js'), /metas\[i\]\.id !== 'theme-color-splash'/);
   assert.ok(existsSync(new URL('../public/images/splash.jpg', import.meta.url)));
 });
 
-test('开屏页样式：电脑上不显示；窄屏铺满并盖在所有层之上；壁纸按 2:3 铺满；减少动态效果时不显示流光', () => {
+test('开屏页样式：电脑上不显示；手机 / 平板全屏覆盖并盖在所有层之上；竖屏铺满、横屏虚化背景铺满；减少动态效果时不显示流光', () => {
   assert.match(css, /\n\.splash \{\s*display: none;\s*\}/, '默认（电脑）不显示');
-  const narrow = css.match(/@media \(max-width: 899px\) \{\s*\.splash \{([^}]*)\}/)?.[1] ?? '';
+  const narrow = css.match(/@media \(max-width: 899px\), \(pointer: coarse\) \{\s*\.splash \{([^}]*)\}/)?.[1] ?? '';
   assert.match(narrow, /display: block/);
   assert.match(narrow, /position: fixed/);
   const z = Number(narrow.match(/z-index: (\d+)/)?.[1]);
@@ -37,6 +43,10 @@ test('开屏页样式：电脑上不显示；窄屏铺满并盖在所有层之�
   assert.match(css, /\.splash\.splash-hide \{[^}]*opacity: 0[^}]*visibility: hidden/s, '淡出');
   assert.match(css, /\.splash-art \{[^}]*width: max\(100vw, 66\.667vh\);\s*height: max\(150vw, 100vh\)[^}]*url\('\.\.\/images\/splash\.jpg'\)/s);
   assert.match(css, /\.splash-bar \{[^}]*left: 26\.95%;\s*width: 46%;\s*top: 86\.85%/s, '进度条在壁纸原来的位置');
+  // 横屏（比 3:4 宽，19/25 = 0.76）：整屏铺虚化背景，清晰壁纸按高度完整显示；3:4 的竖屏平板仍直接铺满
+  const wide = css.match(/@media \(min-aspect-ratio: 19\/25\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.match(wide, /\.splash::before \{[^}]*top: 0;[^}]*bottom: 0;[^}]*url\('\.\.\/images\/splash-bg\.jpg'\) center \/ cover/s);
+  assert.match(wide, /\.splash-art \{[^}]*width: 66\.667vh;\s*height: 100vh/s);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.splash-shine \{\s*display: none;/);
 });
 

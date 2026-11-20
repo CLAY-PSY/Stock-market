@@ -7,7 +7,7 @@
   var api = { step: noop, done: noop };
   window.StockPulseSplash = api;
 
-  // 开屏期间的状态栏颜色写在 <head> 里（只对窄屏生效），开屏结束时移除，恢复主题色
+  // 开屏期间的状态栏颜色写在 <head> 里（只对手机 / 平板生效），开屏结束时移除，恢复主题色
   var meta = document.getElementById('theme-color-splash');
   var dropMeta = function () {
     if (meta && meta.parentNode) meta.parentNode.removeChild(meta);
@@ -18,8 +18,8 @@
     dropMeta();
     return;
   }
-  // 只在手机 / 平板（窄屏）上显示；电脑上直接移除，不挡页面
-  if (!(window.matchMedia && window.matchMedia('(max-width: 899px)').matches)) {
+  // 只在手机 / 平板上显示（窄屏，或以触屏为主的设备）；电脑上直接移除，不挡页面。条件与 CSS 里的 media 一致
+  if (!(window.matchMedia && window.matchMedia('(max-width: 899px), (pointer: coarse)').matches)) {
     el.parentNode.removeChild(el);
     dropMeta();
     return;
