@@ -7,11 +7,21 @@
   var api = { step: noop, done: noop };
   window.StockPulseSplash = api;
 
+  // 开屏期间的状态栏颜色写在 <head> 里（只对窄屏生效），开屏结束时移除，恢复主题色
+  var meta = document.getElementById('theme-color-splash');
+  var dropMeta = function () {
+    if (meta && meta.parentNode) meta.parentNode.removeChild(meta);
+  };
+
   var el = document.getElementById('splash');
-  if (!el) return;
+  if (!el) {
+    dropMeta();
+    return;
+  }
   // 只在手机 / 平板（窄屏）上显示；电脑上直接移除，不挡页面
   if (!(window.matchMedia && window.matchMedia('(max-width: 899px)').matches)) {
     el.parentNode.removeChild(el);
+    dropMeta();
     return;
   }
 
@@ -22,16 +32,9 @@
   var last = start;
   var shown = 0; // 进度条当前显示的进度（0～1）
   var reached = 0; // 已经到达的加载阶段
-  var creep = 0; // 两个阶段之间缓慢前进的进度
   var finished = false;
   var closed = false;
   var timer = 0;
-
-  // 开屏期间把状态栏 / 地址栏颜色换成壁纸的深蓝：放在最前面的 theme-color 优先生效；结束后移除，恢复主题色
-  var meta = document.createElement('meta');
-  meta.setAttribute('name', 'theme-color');
-  meta.setAttribute('content', '#01122f');
-  document.head.insertBefore(meta, document.head.firstChild);
 
   var raf =
     window.requestAnimationFrame ||
@@ -44,7 +47,7 @@
     closed = true;
     clearInterval(timer);
     el.classList.add('splash-hide'); // 淡出（CSS 过渡）
-    if (meta.parentNode) meta.parentNode.removeChild(meta);
+    dropMeta();
     setTimeout(function () {
       if (el.parentNode) el.parentNode.removeChild(el);
     }, 600);
@@ -59,7 +62,9 @@
     if (now - start > MAX_MS) finished = true;
     var target = 1;
     if (!finished) {
-      creep = Math.min(0.92, Math.max(creep, reached) + dt * 0.00008); // 约每秒前进 8%，最多到 92%
+      // 还没报告阶段时也在前进：先快后慢（0.3 秒约 10%、1 秒约 30%、3 秒约 64%），最多到 90%。
+      // 网络慢、页面脚本还在下载时进度条也不会停在原地
+      var creep = 0.9 * (1 - Math.exp(-(now - start) / 2500));
       target = Math.max(reached, creep);
     }
     // 平滑地追上目标进度；加载完成后加快，约 0.3 秒走满

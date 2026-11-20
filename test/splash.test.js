@@ -18,6 +18,11 @@ test('开屏页紧跟在 <body> 后面，进度脚本紧跟开屏页同步执行
   assert.ok(body < splash && splash < splashJs && splashJs < app && app < main, '顺序：body → 开屏页 → splash.js → 页面 → main.js');
   assert.match(html, /<div class="splash" id="splash" aria-hidden="true">/);
   assert.match(html, /<link rel="preload" href="images\/splash\.jpg" as="image" media="\(max-width: 899px\)" \/>/);
+  // 开屏期间的状态栏颜色：写在 <head> 里、排在其它 theme-color 前面（第一帧就生效），只对窄屏生效
+  const metas = [...html.matchAll(/<meta name="theme-color"[^>]*>/g)].map((m) => m[0]);
+  assert.match(metas[0], /id="theme-color-splash" media="\(max-width: 899px\)" content="#01122f"/);
+  // boot.js 手动主题时改写 theme-color，不能把开屏的颜色也改掉
+  assert.match(read('js/boot.js'), /metas\[i\]\.id !== 'theme-color-splash'/);
   assert.ok(existsSync(new URL('../public/images/splash.jpg', import.meta.url)));
 });
 
@@ -39,7 +44,8 @@ test('开屏页样式：电脑上不显示；窄屏铺满并盖在所有层之�
 function runSplash({ narrow = true } = {}) {
   const classes = new Set();
   const fill = { style: { width: '' } };
-  const head = { firstChild: null, children: [], insertBefore(node) { this.children.unshift(node); node.parentNode = this; }, removeChild(node) { this.children = this.children.filter((n) => n !== node); node.parentNode = null; } };
+  const head = { removeChild(node) { node.parentNode = null; } };
+  const meta = { parentNode: head, content: '#01122f' };
   const body = { removeChild(node) { node.parentNode = null; } };
   const splash = {
     parentNode: body,
@@ -48,8 +54,7 @@ function runSplash({ narrow = true } = {}) {
   };
   const document = {
     head,
-    getElementById: (id) => (id === 'splash' ? splash : null),
-    createElement: () => ({ attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, parentNode: null }),
+    getElementById: (id) => ({ splash, 'theme-color-splash': meta })[id] ?? null,
   };
   const window = {
     matchMedia: () => ({ matches: narrow }),
@@ -71,7 +76,7 @@ function runSplash({ narrow = true } = {}) {
     width: () => parseFloat(fill.style.width) || 0,
     hiding: () => classes.has('splash-hide'),
     removed: () => splash.parentNode === null,
-    themeMeta: () => head.children.find((n) => n.attrs?.name === 'theme-color')?.attrs.content ?? null,
+    themeMeta: () => (meta.parentNode ? meta.content : null),
     cleanup: () => timers.forEach((t) => { clearTimeout(t); clearInterval(t); }),
   };
 }
@@ -112,6 +117,23 @@ test('电脑（宽屏）上不显示开屏页：直接移除，接口照常可�
     assert.equal(s.themeMeta(), null);
     s.api.step(0.5);
     s.api.done();
+  } finally {
+    s.cleanup();
+  }
+});
+
+test('还没报告任何加载阶段时（网络慢、页面脚本还在下载）：进度条先快后慢地前进，不会停在原地，也不会自己走满', async () => {
+  const s = runSplash();
+  try {
+    await wait(300);
+    const w1 = s.width();
+    assert.ok(w1 >= 5, `0.3 秒时已有明显进度（${w1}%）`);
+    await wait(700);
+    const w2 = s.width();
+    assert.ok(w2 >= 20 && w2 > w1, `1 秒时继续前进（${w2}%）`);
+    await wait(600);
+    assert.ok(s.width() < 90, `没有加载完成就不会走满（${s.width()}%）`);
+    assert.ok(!s.hiding());
   } finally {
     s.cleanup();
   }
