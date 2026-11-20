@@ -28,9 +28,18 @@
     <title>StockPulse · 实时行情</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="css/app.css" />
+    <!-- 开屏壁纸只在手机 / 平板（窄屏）上显示，提前开始下载 -->
+    <link rel="preload" href="images/splash.jpg" as="image" media="(max-width: 899px)" />
     <script src="js/boot.js"></script>
   </head>
   <body>
+    <!-- 开屏页：品牌壁纸 + 跟着真实加载进度走的进度条（js/splash.js），拿到第一批行情后淡出 -->
+    <div class="splash" id="splash" aria-hidden="true">
+      <div class="splash-art">
+        <div class="splash-bar"><span class="splash-fill"><span class="splash-shine"></span></span></div>
+      </div>
+    </div>
+    <script src="js/splash.js"></script>
     <div class="app" id="app" data-view="quote">
       <header class="topbar">
         <a class="brand" href="./" aria-label="StockPulse 首页">
