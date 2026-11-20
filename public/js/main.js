@@ -75,10 +75,6 @@ async function detectMode() {
 
 /* ------------------------------------------------------------- bootstrap */
 
-// 开屏页的加载进度（js/splash.js）：页面脚本已加载 → 数据源就绪 → 各面板就绪 → 开始拉行情 → 第一批行情到达
-const splash = window.StockPulseSplash ?? { step() {}, done() {} };
-splash.step(0.25);
-
 const mode = await detectMode();
 document.documentElement.dataset.mode = mode;
 let directProvider = null;
@@ -86,7 +82,6 @@ if (mode === 'static') {
   ({ directProvider } = await import('./data/direct-provider.js'));
   useDirectProvider(directProvider);
 }
-splash.step(0.4);
 
 const initial = symbolFromHash();
 if (initial) store.selected = initial;
@@ -132,7 +127,6 @@ initOrderbook();
 initTicks();
 initRank({ onPick: pick });
 chartPanel = initChartPanel();
-splash.step(0.6);
 
 // 前进 / 后退、手动修改地址栏中的代码
 const syncFromHash = () => {
@@ -182,10 +176,7 @@ rt.on('hello', (msg) => {
   if (msg.market) setMarket(msg.market);
   renderBanner();
 });
-rt.on('quotes', (msg) => {
-  store.applyQuotes(msg.data ?? []);
-  splash.done(); // 第一批行情已显示，开屏页走满后淡出
-});
+rt.on('quotes', (msg) => store.applyQuotes(msg.data ?? []));
 rt.on('unknown', (msg) => store.markUnknown(msg.symbols ?? []));
 rt.on('market', (msg) => setMarket(msg.data));
 // 服务端的提示（例如订阅数量达到上限）：节流显示，避免刷屏
@@ -198,7 +189,6 @@ rt.on('error', (msg) => {
 rt.on('upstream', (msg) => {
   upstreamMessage = msg.ok ? null : msg.message || '未知错误';
   renderBanner();
-  if (!msg.ok) splash.done(); // 行情接口暂时不可用：不挡在开屏页上，直接显示页面和提示
   if (msg.ok) {
     toast('行情数据源已恢复', { kind: 'success', duration: 2500 });
     chartPanel.retryIfFailed(); // 图表之前没加载出来的，现在重新加载
@@ -221,7 +211,6 @@ rt.on('latency', (latency) => renderConnection({ state: rt.state, latency, mode 
 store.on('subscriptions', () => rt.setSymbols(store.subscriptionSet()));
 rt.setSymbols(store.subscriptionSet());
 rt.connect();
-splash.step(0.7);
 
 // 网络恢复、切回前台、页面从缓存恢复（手机上切回浏览器 / 主屏幕 App、返回上一页）：立即刷新行情。
 // 切走 / 离开 / 被冻结时先告诉连接：这段时间里没返回的请求，延迟与失败不算数

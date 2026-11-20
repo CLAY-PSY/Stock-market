@@ -67,9 +67,7 @@
   if (mode !== 'auto') {
     var color = theme === 'dark' ? '#11161f' : '#ffffff';
     var metas = document.querySelectorAll('meta[name="theme-color"]');
-    for (var i = 0; i < metas.length; i += 1) {
-      if (metas[i].id !== 'theme-color-splash') metas[i].setAttribute('content', color); // 开屏期间的颜色另行管理
-    }
+    for (var i = 0; i < metas.length; i += 1) metas[i].setAttribute('content', color);
   }
 
   var mq = function (q) {
