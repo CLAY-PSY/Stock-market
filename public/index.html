@@ -4,8 +4,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
-    <!-- 开屏期间（手机 / 平板）状态栏用壁纸的深蓝；放在最前面优先生效，开屏结束时由 js/splash.js 移除 -->
-    <meta name="theme-color" id="theme-color-splash" media="(max-width: 899px), (pointer: coarse)" content="#01122f" />
     <!-- 地址栏 / 状态栏颜色：跟随系统时按系统外观二选一，手动指定主题时由 JS 统一改成所选颜色 -->
     <meta name="theme-color" id="theme-color-light" media="(prefers-color-scheme: light)" content="#ffffff" />
     <meta name="theme-color" id="theme-color-dark" media="(prefers-color-scheme: dark)" content="#11161f" />
@@ -30,18 +28,9 @@
     <title>StockPulse · 实时行情</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="css/app.css" />
-    <!-- 开屏壁纸只在手机 / 平板上显示，提前开始下载 -->
-    <link rel="preload" href="images/splash.jpg" as="image" media="(max-width: 899px), (pointer: coarse)" />
     <script src="js/boot.js"></script>
   </head>
   <body>
-    <!-- 开屏页：品牌壁纸 + 跟着真实加载进度走的进度条（js/splash.js），拿到第一批行情后淡出 -->
-    <div class="splash" id="splash" aria-hidden="true">
-      <div class="splash-art">
-        <div class="splash-bar"><span class="splash-fill"><span class="splash-shine"></span></span></div>
-      </div>
-    </div>
-    <script src="js/splash.js"></script>
     <div class="app" id="app" data-view="quote">
       <header class="topbar">
         <a class="brand" href="./" aria-label="StockPulse 首页">
